@@ -207,10 +207,15 @@ class HelsingborgMap(IDrawable):
 
 
 if __name__ == "__main__":
+    from ais import AIS
+    import pandas as pd
+    ais = AIS()
     env = HelsingborgMap()
+    sample_timestamp = pd.to_datetime(ais['timestamp'].iloc[0])
     ax = env.plot(routes=False, terminals=False)
     routes = env.get_ferry_routes()
     for name in routes.keys():
         routes[name].plot(ax=ax, c='red' if name in ['Helsingør (DK) - Helsingborg (S)', 'Helsingør (DK) - Helsingborg (D)'] else 'grey')
+    ais.plot(ax=ax, timestamp=sample_timestamp, max_age_seconds=60)
     plt.show()
 
