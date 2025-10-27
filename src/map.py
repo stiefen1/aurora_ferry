@@ -166,7 +166,7 @@ class HelsingborgMap(IDrawable):
         # Plot ferry routes
         if routes:
             for route in self.data.get('ferry_routes', []):
-                if route is not None and route['name'] in ['Helsingør (DK) - Helsingborg (S)', 'Helsingør (DK) - Helsingborg (D)']:
+                if route is not None and route['name'] in ['Helsingør (DK) - Helsingborg (SE)']: # 'Helsingør (DK) - Helsingborg (S)', 
                     coords = np.array(route['coords'])
                     ax.plot(coords[:, 0], coords[:, 1], '--r', linewidth=3, 
                         label=f"Ferry: {route['name']}")
