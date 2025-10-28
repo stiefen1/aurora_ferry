@@ -10,4 +10,4 @@ Run revolt_control.py to verify installation was succesfull:
 
 ```python .\test\revolt_control.py```
 
-A new gif must have been generated in \videos.
+A new gif must have been generated in the \videos folder.
