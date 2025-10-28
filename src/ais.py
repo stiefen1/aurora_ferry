@@ -44,8 +44,13 @@ class AIS(IDrawable, pd.DataFrame):
     def __init__(
             self,
             src=os.path.join('data', 'AIS.csv'),
+            path_to_folder:str=None,
+            filename:str=None,
             verbose_level: int=0
     ):
+        if path_to_folder is not None and filename is not None:
+            src = os.path.join(path_to_folder, filename)
+            
         pd.DataFrame.__init__(self, pd.read_csv(src))
         IDrawable.__init__(self, verbose_level)
         self.transformer = pyproj.Transformer.from_proj(
