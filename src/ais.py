@@ -158,6 +158,24 @@ class AIS(IDrawable, ISensor, pd.DataFrame):
     def get_all_mmsi(self) -> pd.DataFrame:
         return self['mmsi'].drop_duplicates(inplace=False)
     
+    def get_first_timestamp(self) -> datetime:
+        """Get the earliest timestamp in the AIS dataframe."""
+        if 'timestamp' in self.columns:
+            return pd.to_datetime(self['timestamp'].min())
+        elif 'timestamp_sec' in self.columns:
+            return pd.to_datetime(self['timestamp_sec'].min(), unit='s')
+        else:
+            raise ValueError("No timestamp column found in AIS data")
+    
+    def get_last_timestamp(self) -> datetime:
+        """Get the latest timestamp in the AIS dataframe."""
+        if 'timestamp' in self.columns:
+            return pd.to_datetime(self['timestamp'].max())
+        elif 'timestamp_sec' in self.columns:
+            return pd.to_datetime(self['timestamp_sec'].max(), unit='s')
+        else:
+            raise ValueError("No timestamp column found in AIS data")
+    
     @property
     def n_vessels(self) -> int:
         return len(self.get_all_mmsi())
@@ -179,6 +197,15 @@ if __name__ == "__main__":
     print(ais.get_all_mmsi())
     print(f"\nNumber of vessels: {ais.n_vessels}")
     print(f"\nColumns: {list(ais.columns)}")
+    
+    # Test timestamp methods
+    print(f"\n=== Testing timestamp methods ===")
+    first_time = ais.get_first_timestamp()
+    last_time = ais.get_last_timestamp()
+    duration = last_time - first_time
+    print(f"First timestamp: {first_time}")
+    print(f"Last timestamp:  {last_time}")
+    print(f"Data duration:   {duration}")
     
     # Test get_vessels_at_time function
     print(f"\n=== Testing get_vessels_at_time ===")

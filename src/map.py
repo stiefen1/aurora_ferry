@@ -22,6 +22,7 @@ class HelsingborgMap(IDrawable):
         self.bbox_latlon = self._utm_to_latlon_bbox(bbox_utm)
         self.data = self._load_data()
         self.verbose_level = verbose_level
+        self.polygons = self.get_shore_as_polygons()
     
     def _utm_to_latlon_bbox(self, bbox_utm: Tuple) -> Tuple:
         min_x, min_y, max_x, max_y = bbox_utm
@@ -148,7 +149,7 @@ class HelsingborgMap(IDrawable):
         return [shapely.Polygon(island) for island in islands]
     
     def get_shore_as_obstacles(self) -> List[Obstacle]:
-        return [Obstacle(*zip(poly.exterior.coords.xy)) for poly in self.get_shore_as_polygons()]
+        return [Obstacle(*zip(poly.exterior.coords.xy)) for poly in self.polygons]
 
     def __scatter__(self, ax:Axes, *args, **kwargs) -> Axes:
         return ax
@@ -158,8 +159,8 @@ class HelsingborgMap(IDrawable):
 
     def __plot__(self, ax:Axes, *args, verbose:int=0, terminals:bool=False, routes:bool=False, **kwargs) -> Axes:
         ax.set_facecolor('lightblue')
-        polygons = self.get_shore_as_polygons()
-        for polygon in polygons:
+        
+        for polygon in self.polygons:
             ax.plot(*polygon.exterior.coords.xy, 'black', linewidth=2)
             ax.fill(*polygon.exterior.coords.xy, 'forestgreen')
 
@@ -193,17 +194,26 @@ class HelsingborgMap(IDrawable):
         ax.set_xlabel('Easting (m)')
         ax.set_ylabel('Northing (m)')
         ax.set_title('Ferry Environment - UTM Zone 33N')
-        ax.set_xlim(self.bbox_utm[0], self.bbox_utm[2])
-        ax.set_ylim(self.bbox_utm[1], self.bbox_utm[3])
-        ax.legend()
+        ax.set_xlim(*self.xlim)
+        ax.set_ylim(*self.ylim)
         ax.grid(False)
-        ax.set_aspect('equal')
-        plt.tight_layout()
         return ax        
     
     def save_data(self, filename: LiteralString = os.path.join('data', 'ferry_data.json')):
         with open(filename, 'w') as f:
             json.dump(self.data, f, indent=2)
+
+    @property
+    def center_utm_ne(self) -> Tuple:
+        return 0.5 * (self.bbox_utm[1] + self.bbox_utm[3]), 0.5 * (self.bbox_utm[0] + self.bbox_utm[2])
+    
+    @property
+    def xlim(self) -> Tuple[float, float]:
+        return self.bbox_utm[0], self.bbox_utm[2]
+    
+    @property
+    def ylim(self) -> Tuple[float, float]:
+        return self.bbox_utm[1], self.bbox_utm[3]
 
 
 if __name__ == "__main__":

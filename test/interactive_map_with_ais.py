@@ -37,7 +37,7 @@ def get_vessels_at_time(ais: AIS, timestamp: pd.Timestamp) -> List[Vessel]:
 def main():
     # Load map and AIS
     env = HelsingborgMap()
-    ais = AIS(path_to_folder='data', filename='AIS2.csv')
+    ais = AIS(path_to_folder='data', filename='AIS.csv')
 
     # Ensure timestamp parsed
     ais['timestamp_dt'] = pd.to_datetime(ais['timestamp'])
