@@ -2,8 +2,9 @@ import os
 import pandas as pd
 import pyproj
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, LiteralString, Optional, Tuple, Dict
 from python_vehicle_simulator.visualizer.drawable import IDrawable
+from python_vehicle_simulator.lib.sensor import ISensor
 from python_vehicle_simulator.vehicles.vessel import VESSEL_GEOMETRY
 from python_vehicle_simulator.utils.math_fn import Rzyx
 from matplotlib.axes import Axes
@@ -22,9 +23,9 @@ class Vessel:
     lon: float
     north: float  # Local coordinate system (or utm_north in the UTM version)
     east: float   # Local coordinate system (or utm_east in the UTM version)
-    sog: float    # Speed over ground (knots)
-    cog: float    # Course over ground (degrees)
-    heading: float  # True heading (degrees)
+    sog: float | None    # Speed over ground (knots)
+    cog: float | None    # Course over ground (degrees)
+    heading: float | None  # True heading (degrees)
     timestamp: datetime
     vessel_type: str
     nav_status: str
@@ -35,38 +36,46 @@ class Vessel:
     
     def __post_init__(self):
         """Validate and normalize vessel data."""
-        self.sog = max(0.0, self.sog) if not pd.isna(self.sog) else 0.0
-        self.cog = self.cog % 360 if not pd.isna(self.cog) else 0.0
-        self.heading = self.heading % 360 if not pd.isna(self.heading) else self.cog
-        self.geometry = Rzyx(0, 0, self.heading*np.pi/180) @ VESSEL_GEOMETRY(self.length, self.width) + np.array([self.north, self.east, 0]).reshape(3, 1)
+        self.sog = max(0.0, self.sog) if not pd.isna(self.sog) else None
+        self.cog = self.cog % 360 if not pd.isna(self.cog) else None
+        self.heading = self.heading % 360 if not pd.isna(self.heading) else None
+        self.geometry = None if self.heading is None else Rzyx(0, 0, self.heading*np.pi/180) @ VESSEL_GEOMETRY(self.length, self.width) + np.array([self.north, self.east, 0]).reshape(3, 1)
 
-class AIS(IDrawable, pd.DataFrame):
+class AIS(IDrawable, ISensor, pd.DataFrame):
     def __init__(
             self,
-            src=os.path.join('data', 'AIS.csv'),
-            path_to_folder:str=None,
-            filename:str=None,
-            verbose_level: int=0
+            src: str = os.path.join('data', 'AIS.csv'),
+            path_to_folder: Optional[str] = None,
+            filename: Optional[str] = None,
+            verbose_level: int = 0
     ):
         if path_to_folder is not None and filename is not None:
             src = os.path.join(path_to_folder, filename)
             
         pd.DataFrame.__init__(self, pd.read_csv(src))
         IDrawable.__init__(self, verbose_level)
+        ISensor.__init__(self, noise=None)
         self.transformer = pyproj.Transformer.from_proj(
             '+proj=longlat +datum=WGS84',
             '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
         )
         self._convert_latlon_to_utm()
 
-    def __plot__(self, ax:Axes, *args, timestamp:datetime = None, timestamp_sec:int=None, distance:float=None, max_age_seconds: int = 30, verbose:int=0, **kwargs) -> Axes:
+    def __get__(self, timestamp: Optional[datetime] = None, timestamp_sec: Optional[int] = None, max_age_seconds: int = 30, *args, **kwargs) -> Tuple[List[Vessel], Dict]:
+        return self.get_vessels_at_time(timestamp=timestamp, timestamp_sec=timestamp_sec, max_age_seconds=max_age_seconds, *args, **kwargs), {}
+
+    def __plot__(self, ax:Axes, *args, timestamp: Optional[datetime] = None, timestamp_sec: Optional[int] = None, distance: Optional[float] = None, max_age_seconds: int = 30, verbose: int = 0, **kwargs) -> Axes:
         if distance is None:  
             vessels = self.get_vessels_at_time(timestamp=timestamp, timestamp_sec=timestamp_sec, max_age_seconds=max_age_seconds)
         else:
              vessels = self.get_nearby_vessels(distance, timestamp=timestamp, timestamps_sec=timestamp_sec, max_age_seconds=max_age_seconds)
 
         for vessel in vessels:
-            ax.plot(vessel.geometry[1, :], vessel.geometry[0, :], label=vessel.name)
+            if vessel.geometry is not None:
+                ax.plot(vessel.geometry[1, :], vessel.geometry[0, :], label=vessel.name)
+            else:
+                ax.scatter(vessel.east, vessel.north, s=50, c='red')
+                ax.text(vessel.east, vessel.north, f"Invalid geometry, heading={vessel.heading}")
         ax.set_aspect('equal')
         return ax
 
@@ -79,7 +88,7 @@ class AIS(IDrawable, pd.DataFrame):
         self.insert(0, "east", east)
         self.insert(0, "north", north)
 
-    def get_vessels_at_time(self, timestamp: datetime = None, timestamp_sec: int = None, max_age_seconds: int = 30) -> List[Vessel]:
+    def get_vessels_at_time(self, timestamp: Optional[datetime] = None, timestamp_sec: Optional[int] = None, max_age_seconds: int = 30) -> List[Vessel]:
         """Get all vessels at a specific timestamp with a time tolerance."""
         
         # Convert timestamp to pandas datetime if needed
@@ -136,7 +145,7 @@ class AIS(IDrawable, pd.DataFrame):
         
         return vessels
     
-    def get_nearby_vessels(self, distance: float, timestamp: datetime = None, timestamps_sec: int = None, max_age_seconds: int = 30) -> List[Vessel]:
+    def get_nearby_vessels(self, distance: float, timestamp: Optional[datetime] = None, timestamps_sec: Optional[int] = None, max_age_seconds: int = 30) -> List[Vessel]:
         vessels = []
         for vessel in self.get_vessels_at_time(timestamp=timestamp, timestamp_sec=timestamps_sec, max_age_seconds=max_age_seconds):
             if vessel.distance_to_own_vessel <= distance:
@@ -185,11 +194,10 @@ if __name__ == "__main__":
     for i, vessel in enumerate(vessels):
         print(f"  {i+1}. {vessel.name} (MMSI: {vessel.mmsi})")
         print(f"     Position [N-E]: {vessel.north:.4f}, {vessel.east:.4f}")
-        print(f"     Distance: {vessel.distance_to_own_vessel:.4f}m")
+        print(f"     Distance: {vessel.distance_to_own_vessel:.4f} m")
         print(f"     Speed: {vessel.sog:.1f} kts, Course: {vessel.cog:.0f}°")
         print(f"     Timestamp: {vessel.timestamp}")
         print(f"     Dim: {vessel.length}, {vessel.width}")
-        print(f"     Geometry: {vessel.geometry}")
 
     ais.plot(timestamp=sample_timestamp)
     plt.show()
