@@ -1,13 +1,12 @@
 from python_vehicle_simulator.lib.navigation import INavigation
-from target_tracker import TargetTrackerSequentialEKF
+from src.target_tracker import TargetTrackerSequentialEKF
 import numpy as np
 from typing import List, Optional, Tuple, Dict
-from ais import Vessel
+from src.ais import Vessel, AIS
 from python_vehicle_simulator.lib.obstacle import Obstacle
 from python_vehicle_simulator.lib.weather import Wind, Current
 from python_vehicle_simulator.vehicles.vessel import IVessel
-from camera import Camera
-from ais import AIS
+from src.camera import Camera
 from matplotlib.axes import Axes
 from datetime import datetime
 from dataclasses import dataclass

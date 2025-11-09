@@ -6,13 +6,6 @@ from python_vehicle_simulator.lib.map import RandomMapGenerator
 from python_vehicle_simulator.lib.actuator import AzimuthThruster
 from python_vehicle_simulator.lib.path import PWLPath
 import numpy as np, matplotlib.pyplot as plt
-import os, sys
-
-# Ensure src is on path (src contains map.py and ais.py)
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
 from aurora import SingleAzimuthThrusterParameters, AuroraFerry
 
 dt = 0.2
