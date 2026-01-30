@@ -59,7 +59,7 @@ class NavigationAurora(INavigation):
             nu: np.ndarray,
             dt: float,
             *args,
-            Q: Optional[np.ndarray] = np.eye(4) * 1e-3, # Process noise
+            Q: Optional[np.ndarray] = np.eye(4) * 1e-6, # Process noise
             R: Optional[np.ndarray] = np.eye(4), # measurement noise
             P0: np.ndarray = np.eye(4),
             sensors = {'camera': Camera(), 'ais': AIS()},
@@ -125,7 +125,7 @@ class NavigationAurora(INavigation):
 
         # Get updated vessels from tracked targets
         updated_vessels = [tracked_target.vessel for tracked_target in self.target_collection.values()]
-        print(f"updated vessels: {len(updated_vessels)}")
+        # print(f"updated vessels: {len(updated_vessels)}")
 
         observation = {
             "eta": eta,
@@ -134,9 +134,10 @@ class NavigationAurora(INavigation):
             "wind": wind,
             "obstacles": obstacles,
             "vessels_ais": updated_vessels,  # Use filtered/tracked vessels instead of raw AIS
+            "target_vessels": updated_vessels # Required for IGuidance
         }
 
-        info = {'raw_vessels_ais': vessels_ais, 'vessels_ais': updated_vessels}
+        info = {'raw_vessels_ais': vessels_ais}
         return observation, info
     
     def reset(self):

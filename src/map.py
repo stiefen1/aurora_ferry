@@ -116,7 +116,7 @@ class HelsingborgMap(IDrawable):
     def get_ferry_routes(self) -> Dict[str, PWLPath]:
         routes = {}
         for route in self.data.get('ferry_routes', []):
-            routes.update({route['name']: PWLPath(route['coords'], input_format='east-north')})
+            routes.update({route['name']: PWLPath(route['coords'], input_format='east-north', flip=True if route['name'] == 'Helsingør (DK) - Helsingborg (S)' else False)})
         return routes
     
     def get_tss_zones(self) -> List[Dict]:
@@ -156,6 +156,21 @@ class HelsingborgMap(IDrawable):
 
     def __fill__(self, ax:Axes, *args, **kwargs) -> Axes:
         return ax
+    
+    @property
+    def helsingor_coords_ne(self) -> Tuple[float, float]:
+        for route in self.data.get('ferry_routes', []):
+            if route is not None and route['name'] in ['Helsingør (DK) - Helsingborg (SE)']:
+                return route['coords'][0][1], route['coords'][0][0]
+        raise ValueError(f"Route Helsingør (DK) - Helsingborg (SE) was not found. Call data.get('ferry_routes', []) to see available routes")
+
+    @property
+    def helsingborg_coords_ne(self) -> Tuple[float, float]:
+        for route in self.data.get('ferry_routes', []):
+            if route is not None and route['name'] in ['Helsingør (DK) - Helsingborg (SE)']:
+                return route['coords'][-1][1], route['coords'][-1][0]
+        raise ValueError(f"Route Helsingør (DK) - Helsingborg (SE) was not found. Call data.get('ferry_routes', []) to see available routes")
+
 
     def __plot__(self, ax:Axes, *args, verbose:int=0, terminals:bool=False, routes:bool=False, **kwargs) -> Axes:
         ax.set_facecolor('lightblue')
