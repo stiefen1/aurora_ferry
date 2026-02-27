@@ -1,7 +1,6 @@
 import casadi as cs
-from aurora import AuroraFerryActuatorsParameters, AuroraFerryParameters
+from src.aurora import AuroraFerryActuatorsParameters, AuroraFerryParameters
 from python_vehicle_simulator.utils.math_fn import R_casadi
-from typing import Tuple
 
 SHIP_PARAMS = AuroraFerryParameters()
 ACTUATORS_PARAMS = AuroraFerryActuatorsParameters()
@@ -93,13 +92,13 @@ if __name__ == "__main__":
             
             # Step inputs for azimuth angles (radians)
             if 10 <= t < 50:  # From 10s to 50s
-                u[0, k] = 1  # Azimuth 1
+                u[0, k] = -3.1 # 1  # Azimuth 1
             if 15 <= t < 45:
-                u[1, k] = -1.8  # Azimuth 2
+                u[1, k] = 3.1 # -1.8  # Azimuth 2
             if 20 <= t < 40:
-                u[2, k] = 1.4  # Azimuth 3
+                u[2, k] = -3.1 # 1.4  # Azimuth 3
             if 25 <= t < 35:
-                u[3, k] = -0.2  # Azimuth 4
+                u[3, k] = 3.1 # -0.2  # Azimuth 4
                 
             # Step inputs for propeller speeds
             if 5 <= t < 55:

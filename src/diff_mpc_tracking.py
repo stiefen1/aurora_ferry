@@ -12,11 +12,28 @@ SHIP_PARAMS = AuroraFerryParameters()
 ACTUATORS_PARAMS = AuroraFerryActuatorsParameters()
 
 
-
-
-
-class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
+class DiffMPCTrajectoryTracking(Control, Mpc):
     """
+    Model-Predictive Controller for path tracking of the ReVolt ASV, based on 
+
+    Reinforcement learning-based NMPC for tracking control of ASVs:Theory and experiments
+
+    and 
+
+    MPC-based Reinforcement Learning for a Simplified Freight Mission of Autonomous Surface Vehicles
+
+
+    STATES:
+    eta = [n, e, psi]
+    nu = [u, v, r]
+
+    INPUTS:
+    u   = [alphas, forces]
+        = [
+            a1, a2, a3,
+            f1, f2, f3
+        ]
+    
     Docstring for DiffMPCTrajectoryTracking
 
     States: x = [
@@ -46,18 +63,31 @@ class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
             QN: Optional[np.ndarray] = None,            # state cost (terminal)
             Qpsi: Optional[float] = None,               # heading cost (stage & terminal)
             Ra: Optional[np.ndarray] = None,            # alpha cost (stage)
-            Rn: Optional[np.ndarray] = None             # propeller cost (stage)
+            Rn: Optional[np.ndarray] = None,            # propeller cost (stage)
+            gamma: float = 1.0,
+            u_des: float = 3.0,
     ):
         Control.__init__(self)
         Mpc.__init__(self, Nlp[cs.SX](), prediction_horizon=horizon, shooting=shooting)
         self.dynamics = dynamics
+        self.u_des = u_des
         self.ship_params = ship_params
         self.actuators_params = actuators_params
-        self.Q = Q if Q is not None else np.eye(2) * 1e0  # Reduced from 1e4
+        self.Q = Q if Q is not None else np.diag([1e3, 10, 10])
         self.QN = QN if QN is not None else self.Q.copy()
         self.Qpsi = Qpsi if Qpsi is not None else 1e1  # Reduced from 1e6
-        self.Ra = Ra if Ra is not None else np.eye(self.nu // 2) * 1e-1
-        self.Rn = Rn if Rn is not None else np.eye(self.nu // 2) * 1e-5  # Slightly increased from 1e-7
+        self.Ra = Ra if Ra is not None else np.eye(self.nu // 2) * 1e-2
+        self.Rn = Rn if Rn is not None else np.eye(self.nu // 2) * 1e-7  # Slightly increased from 1e-7
+        self.Theta_v = 1e3*np.diag([1, 1, 1e4, 10, 10, 10])
+
+        # Hyperparameters
+        self.huber_penalty_slope = 200 # 10 # delta
+        self.huber_penalty_weight = 100 # q_x,y
+        self.heading_penalty_weight = 100 # 50 # q_psi
+        self.singular_value_penalty = 1e-3 # epsilon -> for nonsigular thruster configuration
+        self.singular_value_weight = 1e-8 # 1e-6 # 1e-5 # 8e-4 # 1e-9 #  5e-4 # 1e-5 # rho -> for nonsigular thruster configuration
+        self.gamma = gamma # Discount factor -> self.gamma^k
+
         self.init_ocp()
 
     def init_ocp(self) -> None:
@@ -76,11 +106,15 @@ class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
             ub=u_ub.reshape(-1, 1)
         )
 
-
         # Declare non-learnable parameters
+        ### Desired speed
+        self.nu_des = self.nlp.parameter("nu_des", (3, 1))
+        # print("nu_des shape: ", self.nu_des.shape)
+
         ### Desired waypoints (2D)
         self.desired_timestamped_wpts = self.nlp.parameter("wpts", shape=(3, self.horizon + 1)) 
         
+
         # Declare learnable parameters
         # e.g.
         # self.p = self.nlp.parameter("p")
@@ -105,50 +139,36 @@ class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
             "ipopt.tol": 1e-6,      # Relaxed tolerance
             "ipopt.acceptable_tol": 1e-4,  # Acceptable solution tolerance
             "ipopt.mu_init": 1e-3,  # Initial barrier parameter
-            "ipopt.warm_start_init_point": "yes",  # Use warm start
+            "ipopt.warm_start_init_point": "no",  # Use warm start
         }
         # Use IPOPT for nonlinar optimization
         self.init_solver(opts, "ipopt")
 
-    def lagrange(self, xk: cs.SX, ak: cs.SX, nk: cs.SX, wk: cs.SX, wk_next: cs.SX) -> cs.SX:
-        # Position tracking cost
-        pos_cost = (xk[0:2]-wk[0:2]).T @ self.Q @ (xk[0:2]-wk[0:2])
+    def lagrange(self, xk: cs.SX, ak: cs.SX, nk: cs.SX, wk: cs.SX, nu_des: cs.SX) -> cs.SX:
+        # Huber cost to penalize deviation from path
+        pos_cost = self.huber_penalty_slope**2 * (cs.sqrt(1 + ((xk[0]-wk[0])**2 + (xk[1]-wk[1])**2) / self.huber_penalty_slope **2) - 1 ) 
         
-        # Compute desired heading from waypoint difference (finite difference)
-        # dE = wk_next[1] - wk[1]  # East difference
-        # dN = wk_next[0] - wk[0]  # North difference
-        # psi_des = cs.atan2(dE, dN)  # atan2(East, North) for navigation convention
-        
-        # Heading tracking cost (wrap angle difference)
-        psi_error = xk[2] - wk[2]
-        # Normalize angle difference to [-pi, pi]
-        # psi_error = cs.atan2(cs.sin(psi_error), cs.cos(psi_error))
-        # heading_cost = self.Qpsi * psi_error**2
-        heading_cost = self.Qpsi * (1-cs.cos(psi_error))**2 / 2
-        # heading_cost = 0 # self.Qpsi * xk[4]**2
+        # Heading tracking cost
+        heading_cost = 0.5 * (1 - cs.cos(xk[2] - wk[2]))
+
+        # Singular configurations
+        B = self.actuators_params.B(ak[0], ak[1], ak[2], ak[3])
+        singular_cost = 1 / (self.singular_value_penalty + cs.det(B.T @ B))
+
+        # Speed cost
+        speed_cost = (xk[3:6]-nu_des).T @ self.Q @ (xk[3:6]-nu_des)
 
         # Control costs
         control_cost = nk.T @ self.Rn @ nk + ak.T @ self.Ra @ ak
         
-        return pos_cost + heading_cost + control_cost
+        return self.huber_penalty_weight * pos_cost + \
+             self.heading_penalty_weight * heading_cost + \
+             self.singular_value_penalty * singular_cost + \
+             speed_cost + control_cost
     
-    def mayer(self, xN: cs.SX, wN: cs.SX, wN_prev: cs.SX) -> cs.SX:
-        # Terminal position cost
-        pos_cost = (xN[0:2]-wN[0:2]).T @ self.QN @ (xN[0:2]-wN[0:2])
-        
-        # Compute desired terminal heading from last waypoint difference
-        # dE = wN[1] - wN_prev[1]  # East difference
-        # dN = wN[0] - wN_prev[0]  # North difference
-        # psi_des = cs.atan2(dE, dN)
-        
-        # Terminal heading cost
-        psi_error = xN[2] - wN[2]
-        heading_cost = self.Qpsi * (1 - cs.cos(psi_error)) / 2
-        # psi_error = cs.atan2(cs.sin(psi_error), cs.cos(psi_error))
-        # heading_cost = self.Qpsi * psi_error**2
-        # heading_cost = 0 # self.Qpsi * xN[4]**2
-        
-        return pos_cost + heading_cost 
+    def mayer(self, xN: cs.SX, wN: cs.SX, nu_des: cs.SX) -> cs.SX:
+        xd = cs.vertcat(wN, nu_des)
+        return (xN[0:6]-xd).T @ self.Theta_v @ (xN[0:6]-xd)
     
     def compute_cost_components(self, x: np.ndarray, u: np.ndarray, waypoints: np.ndarray) -> dict:
         """
@@ -177,7 +197,6 @@ class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
             xk = x[:, k]
             uk = u[:, k] 
             wk = waypoints[:, k]
-            wk_next = waypoints[:, k+1]
             
             ak = uk[0:4]  # azimuth angles
             nk = uk[4:8]  # propeller speeds
@@ -232,13 +251,11 @@ class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
         cost: cs.SX = cs.SX(0)
         for k in range(self.horizon):
             xk, ak, nk, wk = x[:, k], u[0:4, k], u[4:8, k], self.desired_timestamped_wpts[:, k]
-            wk_next = self.desired_timestamped_wpts[:, k+1]  # Next waypoint for heading calculation
-            cost += self.lagrange(xk, ak, nk, wk, wk_next)
+            cost += self.lagrange(xk, ak, nk, wk, self.nu_des)
         
         # Terminal cost - use difference between last two waypoints to compute desired heading
-        wN = self.desired_timestamped_wpts[:, -1]
-        wN_prev = self.desired_timestamped_wpts[:, -2]
-        cost += self.mayer(x[:, -1], wN, wN_prev)
+        wN = self.desired_timestamped_wpts[:, self.horizon]
+        cost += self.mayer(x[:, self.horizon], wN, self.nu_des)
         return cost
     
     
@@ -253,21 +270,27 @@ class DiffMPCTrajectoryTracking__OLD__(Control, Mpc):
             wind: Wind,
             obstacles: List = [],
             target_vessels: List = [],
-            return_cost_analysis: bool = False
+            return_cost_analysis: bool = False,
+            u_des: Optional[float] = None
         ):
         
-        waypoints_array = np.array(timestamped_wpts).T
+        waypoints_array = np.array(timestamped_wpts).T # reshape(3, self.horizon + 1)
         
         sol = self.solve(
             pars={
                 "x_0": np.concatenate([eta, nu, alpha, n]).reshape(14, 1),
-                "wpts": waypoints_array
+                "wpts": waypoints_array,
+                "nu_des": np.array([u_des or self.u_des, 0, 0])
             })
         
         # Extract control commands for the first time step
         u_cmd = sol.vals["u"][:, 0].full().flatten()
         alpha_cmd = u_cmd[0:4]  
         n_cmd = u_cmd[4:8]     
+
+        # Extract trajectory
+        self.x_prev = sol.vals["x"].full()
+        self.sol_prev = sol
 
         # mpc_ = NlpSensitivity(self)
         # print(mpc_.parametric_sensitivity(self.f, solution=sol, second_order=False)) 
@@ -315,7 +338,7 @@ if __name__ == "__main__":
         discrete_dynamics = get_discrete_3dof_dynamics_as_fn(2)
         
         # Create MPC controller
-        mpc = DiffMPCTrajectoryTracking__OLD__(discrete_dynamics, H)
+        mpc = DiffMPCTrajectoryTracking(discrete_dynamics, H)
         
         # Define reference trajectory (a simple path at 0.2 m/s)
         def get_reference_trajectory(t):

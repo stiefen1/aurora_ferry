@@ -13,11 +13,11 @@ INF = float('inf')
 @dataclass
 class SingleAzimuthThrusterParameters:
     ## Propellers       
-    T_n: float = 0.3                                        # Propeller time constant (s)
-    T_a: float = 3.0                                        # Azimuth angle time constant (s) -> Chosen by me
+    T_n: float = 5 # 3                                      # Propeller time constant (s)
+    T_a: float = 20 # 20.0                                  # Azimuth angle time constant (s) -> Chosen by me
     k_pos: float = 5 # 200                                  # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
     k_neg: float = 5                                        # Negative Bollard, one propeller (Division by two because there are two propellers, values are obtained with a Bollard pull)
-    f_max: float = 38_798                                   # Max positive force, one propeller
+    f_max: float = 40_000 # 38_798                          # Max positive force, one propeller
     f_min: float = 0                                        # Max negative force, one propeller
     n_max: float = sqrt(f_max/k_pos)                        # Max (positive) propeller speed
     n_min: float = 0                                        # We don't allow negative thruster speed
@@ -56,6 +56,10 @@ class AuroraFerryActuatorsParameters:
         self.n_min = np.array([thruster.n_min for thruster in self.thrusters])
         self.a_min = np.array([thruster.a_min for thruster in self.thrusters])                       # Azimuth angles constraints
         self.a_max = np.array([thruster.a_max for thruster in self.thrusters])
+        self.u_min = np.array([thruster.a_min for thruster in self.thrusters] + [thruster.n_min for thruster in self.thrusters])
+        self.u_max = np.array([thruster.a_max for thruster in self.thrusters] + [thruster.n_max for thruster in self.thrusters])
+
+
         self.xy = np.array([[-35, -9.4], [-35, 9.4], [35, 9.4], [35, -9.4]])    
         self.max_radians_per_step = np.array([np.pi/6, np.pi/6, np.pi/6, np.pi/6])
         self.max_newton_per_step = np.array([10.0, 10.0, 10.0, 10.0])
@@ -100,15 +104,12 @@ class AuroraFerryParameters:
     beam: float = 28.2                                  # Beam (m)      
     initial_draft:float = 5.5                           # Initial draft
     volume:float = (m+mp) / RHO                         # m^3 volume 
-    volume_iz:float = 3 * 1e6                           # m^5 volum moment of inertia -> Computed assuming Viz ~ V * (b^2 + loa^2) using similarity laws with Revolt vessel
+    volume_iz:float = 3 * 1e6                          # m^5 volum moment of inertia -> Computed assuming Viz ~ V * (b^2 + loa^2) using similarity laws with Revolt vessel
                                                         
 
     R44: float = 0.36 * beam                            # radii of gyration (m)
     R55: float = 0.26 * loa
     R66: float = 0.26 * loa
-
-    ## Time constants
-    T_yaw: float = 3.0                                  # Time constant in yaw (s)
 
     rg: np.ndarray = field(default_factory=lambda: np.array([0.0, 0, 0.0], float))  
     rp: np.ndarray = field(default_factory=lambda: np.array([0.0, 0, 0.0], float))          # Location of payload (m)
@@ -216,6 +217,14 @@ class AuroraFerry(IVessel):
         nu_dot = np.matmul(self.params.Minv, sum_tau)
 
         return np.array([nu_dot[0], nu_dot[1], 0, 0, 0, nu_dot[2]])
+    
+    @property
+    def alpha_actual(self) -> Tuple[float, ...]:
+        return tuple([actuator.orientation + actuator.u_actual_prev[0] for actuator in self.actuators])
+    
+    @property
+    def n_actual(self) -> Tuple[float, ...]:
+        return tuple([actuator.u_actual_prev[1] for actuator in self.actuators])
 
 
 def print_f_max_from_u_max() -> None:

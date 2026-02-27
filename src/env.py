@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from src.aurora import SingleAzimuthThrusterParameters, AuroraFerry
 from python_vehicle_simulator.lib.actuator import AzimuthThruster
 from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec
+from python_vehicle_simulator.lib.guidance import PathFollowingGuidance
 from colav import MovingShip
 from src.navigation import NavigationAurora
 import pathlib, os, glob
@@ -19,12 +20,13 @@ class AuroraNavEnv(gym.Env):
             self,
             u_des: float = knot_to_m_per_sec(8),
             path_to_ais_folder: str = os.path.join('data'),     # Folder containing all AIS database that will be used for training
-            action_repeat: int = 30,
-            max_steps: int = 5,
+            action_repeat: int = 1,
+            max_steps: int = 200,
             render_mode: Literal['human', None] = None,
             dt: float = 1,
             buffer_moving: float = 200,
-            join_style: Literal['round', 'mitre', 'bevel'] = 'mitre'
+            join_style: Literal['round', 'mitre', 'bevel'] = 'mitre',
+            mpc_horizon: int = 10,
     ):
         self.u_des = u_des
         self.map = HelsingborgMap()
@@ -42,6 +44,9 @@ class AuroraNavEnv(gym.Env):
         # Target vessel buffering
         self.buffer_moving = buffer_moving
         self.join_style = join_style
+
+        # MPC horizon
+        self.mpc_horizon = mpc_horizon
 
         # Weather generators -> Provide bounds and then use objects as self.wind_generator.sample() at the beginning of each episode
         self.wind_generator = None
@@ -64,6 +69,8 @@ class AuroraNavEnv(gym.Env):
         self.distance_threshold_to_docking_area = 500
         self.safety_distance_threshold = 60 # Aurora has a LOA of 111.2. If distance < 60, we consider it as a collision
 
+        self.reset()
+
         # Initialize action and observation spaces
         self.init_action_space()
         self.init_observation_space()
@@ -73,18 +80,25 @@ class AuroraNavEnv(gym.Env):
         Action space is made of azimuth angles & propeller's speed
         """
         self.action_space = gym.spaces.Box(
-            low=-np.ones(shape=(self.n_azimuth_thrusters,), dtype=np.float32),
-            high=np.ones(shape=(self.n_azimuth_thrusters,), dtype=np.float32),
+            low=np.array([actuator.u_min[0] for actuator in self.ferry.actuators] + [actuator.u_min[1] for actuator in self.ferry.actuators]),
+            high=np.array([actuator.u_max[0] for actuator in self.ferry.actuators] + [actuator.u_max[1] for actuator in self.ferry.actuators]),
             dtype=np.float32
         )
 
     def init_observation_space(self) -> None:
         """
-        Observation space is made of tracking error, since goal is to tune parameters of the trajectory tracker (reward will be based on that)
+        Observation space is ferry state + nonlearnable parameters
         """
-        self.observation_space = gym.spaces.Box(
-            low=-1.0, high=1.0, shape=(1,), dtype=np.float32
+        self.observation_space = gym.spaces.Dict(
+            {
+                "state": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(14, 1), dtype=np.float32),
+                "wpts": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3, self.mpc_horizon+1)),
+                "nu_des": gym.spaces.Box(low=np.array([0, 0, 0]), high=np.array(3*[10]))
+            }
         )
+        # self.observation_space = gym.spaces.Box(
+        #     low=-1.0, high=1.0, shape=(1,), dtype=np.float32
+        # )
 
     def reward(self) -> float:
         """
@@ -154,7 +168,7 @@ class AuroraNavEnv(gym.Env):
             return True
         return False
 
-    def reset(self, *args, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[np.ndarray, Dict]:
+    def reset(self, *args, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[Dict, Dict]:
         """Start a new episode.
 
         Args:
@@ -202,15 +216,15 @@ class AuroraNavEnv(gym.Env):
                 max_age_seconds=self.ais_max_age_seconds,
                 sensors = {'ais': self.ais}
             ),
-            # guidance=LOSTimespaceGuidance()
+            guidance=PathFollowingGuidance(self.route, self.mpc_horizon, self.dt, desired_speed=self.u_des)
         )
-
-        observation = np.array([0.0], dtype=np.float32)
+        # self, eta:np.ndarray, nu:np.ndarray, current:Current, wind:Wind, obstacles:List[Obstacle], target_vessels:List, *args, **kwargs
+        observation = self.get_obs({"eta": eta0, "nu": nu0, "current": self.current, "wind": self.wind, "obstacles": [], "target_vessels": []}) # type: ignore
         info = {}
 
         return observation, info
     
-    def step(self, action) -> Tuple[np.ndarray, float, bool, bool, Dict]:
+    def step(self, action) -> Tuple[Dict, float, bool, bool, Dict]:
         """Execute one timestep within the environment.
 
         Args:
@@ -238,17 +252,36 @@ class AuroraNavEnv(gym.Env):
 
         # Simulation
         for _ in range(self.action_repeat):
-            self.ferry.step(self.current, self.wind, self.map.get_shore_as_obstacles(), target_vessels=target_vessels, timestamp=self.t)
+            self.ferry.step(
+                self.current,
+                self.wind,
+                self.map.get_shore_as_obstacles(),
+                target_vessels=target_vessels,
+                timestamp=self.t,
+                control_commands=[np.array([action[i], action[i+4]]) for i in range(4)] # 4 azimuth thrusters (alpha, n)
+            )
             self.t += timedelta(seconds=self.dt)
 
         self.current_step += 1
-        obs = np.array([0.0], dtype=np.float32)
+        obs = self.get_obs(self.ferry.navigation.last_observation) # type: ignore
         r = self.reward()
         term = self.terminated()
         trunc = self.truncated()
         info = {}
 
         return obs, r, term, trunc, info
+    
+    def get_obs(self, navigation_obs: Dict) -> Dict:
+        return {
+            "state": np.concatenate([
+                    self.ferry.eta.to_numpy(dofs=3),
+                    self.ferry.nu.to_numpy(dofs=3),
+                    [actuator.u_actual_prev[0] for actuator in self.ferry.actuators],
+                    [actuator.u_actual_prev[1] for actuator in self.ferry.actuators],
+                ]).reshape(14, 1),
+            "wpts": np.array(self.ferry.guidance(**navigation_obs)[2]["path"]).T,
+            "nu_des": np.array([self.u_des, 0, 0])
+        }
     
     def render(self) -> None:
         """Render the environment if render_mode is 'human'."""
