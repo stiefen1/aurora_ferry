@@ -1,11 +1,18 @@
+from python_vehicle_simulator.lib.diagnosis import IDiagnosis
+from python_vehicle_simulator.lib.dynamics import IDynamics
 from python_vehicle_simulator.vehicles.vessel import IVessel
+from python_vehicle_simulator.lib.guidance import IGuidance
+from python_vehicle_simulator.lib.navigation import INavigation
+from python_vehicle_simulator.lib.control import IControl
 from python_vehicle_simulator.lib.weather import Current, Wind
 from python_vehicle_simulator.lib.physics import RHO, GRAVITY
-from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec, DEG2RAD
+from python_vehicle_simulator.utils.math_fn import R_casadi, Rzyx
+from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec
+from python_vehicle_simulator.lib.thruster import THRUSTER_LENGTH_DEFAULT, THRUSTER_WIDTH_DEFAULT, THRUSTER_GEOMETRY, ROTATION_MATRIX
 from math import pi, sqrt
 from dataclasses import dataclass, field
-import numpy as np, casadi as ca
-from typing import Tuple, List
+import numpy as np, numpy.typing as npt, casadi as cs
+from typing import Tuple, List, Optional
 
 
 INF = float('inf')
@@ -13,18 +20,20 @@ INF = float('inf')
 @dataclass
 class SingleAzimuthThrusterParameters:
     ## Propellers       
-    T_n: float = 5 # 3                                      # Propeller time constant (s)
+    T_n: float = 3 # 3                                      # Propeller time constant (s)
     T_a: float = 20 # 20.0                                  # Azimuth angle time constant (s) -> Chosen by me
-    k_pos: float = 5 # 200                                  # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
-    k_neg: float = 5                                        # Negative Bollard, one propeller (Division by two because there are two propellers, values are obtained with a Bollard pull)
-    f_max: float = 40_000 # 38_798                          # Max positive force, one propeller
+    k_pos: float = 20 # 200                                  # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
+    k_neg: float = 20                                        # Negative Bollard, one propeller (Division by two beuse there are two propellers, values are obtained with a Bollard pull)
+    f_max: float = 570_000 # 600_000 # 40_000 # 38_798                          # Max positive force, one propeller
     f_min: float = 0                                        # Max negative force, one propeller
-    n_max: float = sqrt(f_max/k_pos)                        # Max (positive) propeller speed
-    n_min: float = 0                                        # We don't allow negative thruster speed
-    a_max: float = pi                                       # Max (positive) propeller speed
-    a_min: float = -pi                                      # Min (negative) propeller speed
+    speed_max: float = sqrt(f_max/k_pos)                        # Max (positive) propeller speed
+    speed_min: float = 0                                        # We don't allow negative thruster speed
+    alpha_max: float = pi                                       # Max (positive) propeller speed
+    alpha_min: float = -pi                                      # Min (negative) propeller speed
     max_radians_per_step: float = pi/6
     max_newton_per_step: float = 10
+    geometry = THRUSTER_GEOMETRY(5, 2)
+
 
 @dataclass
 class AuroraFerryActuatorsParameters:
@@ -33,18 +42,18 @@ class AuroraFerryActuatorsParameters:
     # T_a: float = 3.0 
     thrusters: List = field(init=False)                         # Azimuth angle time constant (s) -> Chosen by me
     k_pos: np.ndarray = field(init=False)                       # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
-    k_neg: np.ndarray = field(init=False)                       # Negative Bollard, one propeller (Division by two because there are two propellers, values are obtained with a Bollard pull)
+    k_neg: np.ndarray = field(init=False)                       # Negative Bollard, one propeller (Division by two beuse there are two propellers, values are obtained with a Bollard pull)
     f_max: np.ndarray = field(init=False)                       # Max positive force, one propeller
     f_min: np.ndarray = field(init=False)                       # Max negative force, one propeller
-    n_max: np.ndarray = field(init=False)                       # Max (positive) propeller speed
-    n_min: np.ndarray = field(init=False)
-    lba: np.ndarray = field(init=False)                       # Max (positive) propeller speed
-    uba: np.ndarray = field(init=False)                         # Min (negative) propeller speed
+    speed_max: np.ndarray = field(init=False)                       # Max (positive) propeller speed
+    speed_min: np.ndarray = field(init=False)
+    alpha_min: np.ndarray = field(init=False)
+    alpha_max: np.ndarray = field(init=False)
     xy: np.ndarray = field(init=False) # azimuth, azimuth, thruster from https://ntnuopen.ntnu.no/ntnu-xmlui/bitstream/handle/11250/2452115/16486_FULLTEXT.pdf (p.56)
     max_radians_per_step: np.ndarray = field(init=False)
     max_newton_per_step: np.ndarray = field(init=False)
     time_constant: np.ndarray = field(init=False)
-    nu: int = field(init=False)
+    geometries: List = field(init=False)
 
     def __post_init__(self):
         self.thrusters = [SingleAzimuthThrusterParameters(), SingleAzimuthThrusterParameters(), SingleAzimuthThrusterParameters(), SingleAzimuthThrusterParameters()]  
@@ -52,35 +61,31 @@ class AuroraFerryActuatorsParameters:
         self.k_neg: np.ndarray = np.array([thruster.k_neg for thruster in self.thrusters])    # Negative Bollard, one propeller
         self.f_max: np.ndarray = np.array([thruster.f_max for thruster in self.thrusters])    # Max positive force, one propeller
         self.f_min: np.ndarray = np.array([thruster.f_min for thruster in self.thrusters]) 
-        self.n_max = np.array([thruster.n_max for thruster in self.thrusters])
-        self.n_min = np.array([thruster.n_min for thruster in self.thrusters])
-        self.a_min = np.array([thruster.a_min for thruster in self.thrusters])                       # Azimuth angles constraints
-        self.a_max = np.array([thruster.a_max for thruster in self.thrusters])
-        self.u_min = np.array([thruster.a_min for thruster in self.thrusters] + [thruster.n_min for thruster in self.thrusters])
-        self.u_max = np.array([thruster.a_max for thruster in self.thrusters] + [thruster.n_max for thruster in self.thrusters])
+        self.speed_min = np.array([thruster.speed_min for thruster in self.thrusters])
+        self.speed_max = np.array([thruster.speed_max for thruster in self.thrusters])          # Thruster speed constraints
+        self.alpha_min = np.array([thruster.alpha_min for thruster in self.thrusters])                       # Azimuth angles constraints
+        self.alpha_max = np.array([thruster.alpha_max for thruster in self.thrusters])
 
-
-        self.xy = np.array([[-35, -9.4], [-35, 9.4], [35, 9.4], [35, -9.4]])    
-        self.max_radians_per_step = np.array([np.pi/6, np.pi/6, np.pi/6, np.pi/6])
-        self.max_newton_per_step = np.array([10.0, 10.0, 10.0, 10.0])
+        self.xy = np.array([[-45, -9.4], [-45, 9.4], [25, 9.4], [25, -9.4]]) # np.array([[-35, -9.4], [-35, 9.4], [35, 9.4], [35, -9.4]])    
         self.time_constant = np.array([thruster.T_n for thruster in self.thrusters] + [thruster.T_a for thruster in self.thrusters])
         self.T_n = np.array([thruster.T_n for thruster in self.thrusters])
         self.T_a = np.array([thruster.T_a for thruster in self.thrusters])
-        self.nu = len(self.thrusters)
 
-        self.Bi = lambda alpha, lx, ly : np.array([
-            ca.cos(alpha),
-            ca.sin(alpha),
-            lx*ca.sin(alpha) - ly * ca.cos(alpha)
+        self.Ai = lambda alpha, lx, ly : np.array([
+            cs.cos(alpha),
+            cs.sin(alpha),
+            lx*cs.sin(alpha) - ly * cs.cos(alpha)
         ])
 
         ####### WARNING : IF YOU CHANGE T YOU HAVE TO DO IT AS WELL IN RL ENVIRONMENTS, IT IS NOT LINKED ######
-        self.B = lambda a1, a2, a3, a4 : ca.vertcat(
-            ca.horzcat(ca.cos(a1), ca.sin(a1), self.xy[0, 0]*ca.sin(a1) - self.xy[0, 1] * ca.cos(a1)),
-            ca.horzcat(ca.cos(a2), ca.sin(a2), self.xy[1, 0]*ca.sin(a2) - self.xy[1, 1] * ca.cos(a2)),
-            ca.horzcat(ca.cos(a3), ca.sin(a3), self.xy[2, 0]*ca.sin(a3) - self.xy[2, 1] * ca.cos(a3)),
-            ca.horzcat(ca.cos(a4), ca.sin(a4), self.xy[3, 0]*ca.sin(a4) - self.xy[3, 1] * ca.cos(a4))
+        self.Alpha = lambda a1, a2, a3, a4 : cs.vertcat(
+            cs.horzcat(cs.cos(a1), cs.sin(a1), self.xy[0, 0]*cs.sin(a1) - self.xy[0, 1] * cs.cos(a1)),
+            cs.horzcat(cs.cos(a2), cs.sin(a2), self.xy[1, 0]*cs.sin(a2) - self.xy[1, 1] * cs.cos(a2)),
+            cs.horzcat(cs.cos(a3), cs.sin(a3), self.xy[2, 0]*cs.sin(a3) - self.xy[2, 1] * cs.cos(a3)),
+            cs.horzcat(cs.cos(a4), cs.sin(a4), self.xy[3, 0]*cs.sin(a4) - self.xy[3, 1] * cs.cos(a4))
         ).T
+
+        self.geometries = [thruster.geometry for thruster in self.thrusters]
 
 @dataclass
 class AuroraFerryParameters:
@@ -159,73 +164,143 @@ class AuroraFerryParameters:
             [-self.Yvdot * nu_r[1]-self.Yrdot * nu_r[2], self.Xudot * nu_r[0], 0]
         ])
         ## Damping Matrix
+        # self.D = np.array([
+        #     [-self.Xu, 0, 0],
+        #     [0, -self.Yv, -self.Yr],
+        #     [0, -self.Nv, -self.Nr]
+        # ])
         self.D = np.array([
-            [-self.Xu, 0, 0],
-            [0, -self.Yv, -self.Yr],
-            [0, -self.Nv, -self.Nr]
+            [2e4 * 15, 0, 0],
+            [0, 5e6, 1e6],
+            [0, 1e6, 1e9]
         ])
 
+class Aurora3Dynamics(IDynamics):
+    vessel_params = AuroraFerryParameters()
+    actuator_params = AuroraFerryActuatorsParameters()
 
-
-class AuroraFerry(IVessel):
     def __init__(
             self,
             dt: float,
-            eta0: Tuple,
-            nu0: Tuple,
-            *args, 
-            **kwargs
-    ):
-        # Handle states provided in 3DOFs
-        if len(eta0) == 3:
-            eta0 = (eta0[0], eta0[1], 0, 0, 0, eta0[2])
-        if len(nu0) == 3:
-            nu0 = (nu0[0], nu0[1], 0, 0, 0, nu0[2])
-
-        super().__init__(
-            params=AuroraFerryParameters(),
-            dt=dt,
-            eta=eta0,
-            nu=nu0,
             *args,
             **kwargs
+    ):
+        nx, nu, np, nd = 20, 8, 8, 3
+        super().__init__(nx, nu, np, nd, dt, *args, **kwargs)
+
+    def continuous_time_dynamics(self, x: cs.SX, u: cs.SX, theta: cs.SX, disturbance: cs.SX | None, *args, **kwargs) -> cs.SX:
+        x_dot = cs.SX.zeros(self.nx, 1) # type: ignore
+
+        eta_3dofs, nu_3dofs = cs.vcat([x[0], x[1], x[5]]), cs.vcat([x[6], x[7], x[11]])
+        azimuth, thruster_speed = x[12:16], x[16:20]
+        azimuth_setpoint = cs.fmax(cs.fmin(u[0:4], self.actuator_params.alpha_max), self.actuator_params.alpha_min)
+        speed_setpoint = cs.fmax(cs.fmin(u[4:8], self.actuator_params.speed_max), self.actuator_params.speed_min)
+        azimuth_stucked, propeller_effectiveness = theta[0:4], theta[4:8]
+
+        # Generalized force generated by actuators
+        thrust = propeller_effectiveness * self.actuator_params.k_pos * thruster_speed * thruster_speed
+        tau_actuators = self.actuator_params.Alpha(azimuth[0], azimuth[1], azimuth[2], azimuth[3]) @ thrust
+
+        # Hull dynamics (body frame)
+        Minv, C, D = self.vessel_params.Minv, self.vessel_params.CA(nu_3dofs) + self.vessel_params.CRB(nu_3dofs), self.vessel_params.D
+        nu_dot_3dofs = Minv @ (tau_actuators + disturbance - C @ nu_3dofs - D @ nu_3dofs)
+        x_dot[6] = nu_dot_3dofs[0]
+        x_dot[7] = nu_dot_3dofs[1]
+        x_dot[11] = nu_dot_3dofs[2]
+
+        # Ship's kinematics (body -> NED)
+        eta_dot_3dofs = cs.mtimes(R_casadi(eta_3dofs[2]), nu_3dofs)
+        x_dot[0] = eta_dot_3dofs[0]
+        x_dot[1] = eta_dot_3dofs[1]
+        x_dot[5] = eta_dot_3dofs[2]
+
+        # Actuator's dynamics: Low-pass
+        x_dot[12:16] = azimuth_stucked * (azimuth_setpoint - azimuth) / self.actuator_params.T_a
+        x_dot[16:20] = (speed_setpoint - thruster_speed) / self.actuator_params.T_n
+
+        return x_dot
+
+class AuroraFerry(IVessel):
+    vessel_params = AuroraFerryParameters()
+    actuator_params = AuroraFerryActuatorsParameters()
+
+    def __init__(
+            self,
+            dt: float,
+            eta: Tuple = (0, 0, 0),
+            nu: Tuple = (0, 0, 0),
+            thruster_speeds: Tuple = (0, 0, 0, 0),
+            azimuth_angles: Tuple = (0, 0, 0, 0),
+            guidance: Optional[IGuidance] = None,
+            navigation: Optional[INavigation] = None,
+            control: Optional[IControl] = None,
+            diagnosis: Optional[IDiagnosis] = None,
+            mmsi: Optional[str] = None,
+            verbose_level: int = 0
+    ):
+        """
+        Aurora autonomous ferry with 3DOF dynamics.
+        
+        dt:             Sampling time
+        eta:            Initial position [x, y, psi]        (3,)
+        nu:             Initial velocity [u, v, r]          (3,)
+        guidance:       Guidance system (optional)
+        navigation:     Navigation system (optional)
+        control:        Control system (optional)
+        diagnosis:      Diagnosis system (optional)
+        mmsi:           Maritime Mobile Service Identity
+        verbose_level:  Verbosity level for logging
+        """
+
+        super().__init__(
+            self.vessel_params.loa,
+            self.vessel_params.beam,
+            Aurora3Dynamics(dt),
+            states=(eta[0], eta[1], 0, 0, 0, eta[2], nu[0], nu[1], 0, 0, 0, nu[2], *azimuth_angles, *thruster_speeds),
+            guidance=guidance,
+            navigation=navigation,
+            control=control,
+            diagnosis=diagnosis,
+            name='Aurora3',
+            mmsi=mmsi,
+            verbose_level=verbose_level,
         )
 
-    def __dynamics__(self, tau_actuators:np.ndarray, current:Current, wind:Wind, *args, **kwargs) -> np.ndarray:
+    def __dynamics__(self, control_commands:npt.NDArray, current:Current, wind:Wind, *args, theta: Optional[npt.NDArray] = None, **kwargs) -> np.ndarray:
         """
-        [nu,u_actual] = dynamics(eta,nu,u_actual,u_control,sampleTime) integrates
-        the Otter USV equations of motion using Euler's method.
+        Vessel dynamics step with environmental disturbances.
+        
+        control_commands:   Thruster commands [azimuth, speeds]  (6,)
+        current:            Current disturbance model
+        wind:               Wind disturbance model
+        theta:              Fault parameters (optional)          (6,)
+        
+        Returns:
+            List: [next eta, next nu, next alpha, next thruster speed]
+
+        Azimuth thrusters are organized in the following order:
+        - Stern port        (xy=[-1.65, -0.15])
+        - Stern starboard   (xy=[-1.65, 0.15])
+        - Bow               (xy=[1.15, 0.0])
         """
-        nu = np.array(self.nu.uvr)
-        tau_actuators_3 = np.array([tau_actuators[0], tau_actuators[1], tau_actuators[5]])
-
-        CRB = self.params.CRB(nu)
-        CA = self.params.CA(nu)
-        C = CRB + CA
-
-        # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = np.matmul(self.params.D, nu)
-
-        # State derivatives (with dimension)
-        sum_tau = (
-            tau_actuators_3
-            - tau_damp
-            - np.matmul(C, nu)
-        )
-
-        # USV dynamics
-        nu_dot = np.matmul(self.params.Minv, sum_tau)
-
-        return np.array([nu_dot[0], nu_dot[1], 0, 0, 0, nu_dot[2]])
+        disturbance = np.array([0, 0, 0]) # Define it as a function of current, wind
+        theta = theta if theta is not None else np.array(self.dynamics.nt * [1.0])
+        x = self.dynamics.fd(self.states, control_commands, theta, disturbance).flatten()
+        return x
     
-    @property
-    def alpha_actual(self) -> Tuple[float, ...]:
-        return tuple([actuator.orientation + actuator.u_actual_prev[0] for actuator in self.actuators])
-    
-    @property
-    def n_actual(self) -> Tuple[float, ...]:
-        return tuple([actuator.u_actual_prev[1] for actuator in self.actuators])
-
+    def __plot__(self, ax, *args, verbose:int=0, **kwargs):
+        """
+        x = East
+        y = North
+        z = -depth
+        """
+        ax.scatter(self.eta[1], self.eta[0], *args, **kwargs)
+        ax.plot(*self.geometry_for_2D_plot, *args, **kwargs)
+        for i in range(3):
+            envelope = (ROTATION_MATRIX(self.states[12 + i]) @ self.actuator_params.geometries[i].T) + self.actuator_params.xy[i].reshape(-1, 1)
+            envelope_in_ned_frame = Rzyx(*self.eta.to_numpy()[3:6].tolist())[0:2, 0:2] @ envelope + self.eta.to_numpy()[0:2, None]
+            ax.plot(envelope_in_ned_frame[1, :], envelope_in_ned_frame[0, :], *args, **kwargs)
+        return ax
 
 def print_f_max_from_u_max() -> None:
     params = AuroraFerryParameters()
@@ -241,4 +316,9 @@ def print_f_max_from_u_max() -> None:
     print(f"single actuator force:\n{0.25*(D @ nu - C @ nu)}")
 
 if __name__ == "__main__":
+    aurora = AuroraFerry(0.1)
+    print("M: ", np.linalg.inv(aurora.vessel_params.Minv))
+    print("C: ", aurora.vessel_params.CA(np.array([0, 0, 0])) + aurora.vessel_params.CRB(np.array([0, 0, 0])))
+    print("D: ", aurora.vessel_params.D)
+
     print_f_max_from_u_max()

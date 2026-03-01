@@ -1,7 +1,7 @@
 from src.mpcrl.trajectory_tracker import ParametricTrajectoryTracker
 from stable_baselines3 import TD3
 from stable_baselines3.td3.nmpc_td3 import TD3NMPCPolicy
-from src.env import AuroraNavEnv
+from src.rl.env import AuroraNavEnv
 import numpy as np
 
 mpc_horizon = 10
