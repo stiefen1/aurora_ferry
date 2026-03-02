@@ -3,15 +3,15 @@ from stable_baselines3.ppo import PPO
 import os, time
 
 from src.aurora import AuroraFerry
-from src.rl.env import GymNavEnv
+from src.rl.traj_tracking_env import TrajTrackingEnv
 
 alg = "ppo"
-data_and_time = "2026_02_28_22_04_44"
-weights_name = "aurora_3000000_steps.zip"
+data_and_time = "2026_03_01_21_42_49"
+weights_name = "aurora_900000_steps.zip"
 
 dt = 0.2
 revolt = AuroraFerry(dt)
-env = GymNavEnv(
+env = TrajTrackingEnv(
     own_vessel=revolt,
     render_mode="human"
 )

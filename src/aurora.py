@@ -116,6 +116,8 @@ class AuroraFerryParameters:
     R55: float = 0.26 * loa
     R66: float = 0.26 * loa
 
+    surge_speed_max: float = knot_to_m_per_sec(14.9)
+
     rg: np.ndarray = field(default_factory=lambda: np.array([0.0, 0, 0.0], float))  
     rp: np.ndarray = field(default_factory=lambda: np.array([0.0, 0, 0.0], float))          # Location of payload (m)
 
