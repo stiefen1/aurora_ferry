@@ -108,9 +108,16 @@ class AuroraFerryParameters:
     loa: float = 111.2                                  # Length Over All (m) assumed equal to LPP
     beam: float = 28.2                                  # Beam (m)      
     initial_draft:float = 5.5                           # Initial draft
+    mean_height_above_water: float = 15.0                    
+    proj_area_f: float = mean_height_above_water * beam
+    proj_area_l: float = mean_height_above_water * loa
     volume:float = (m+mp) / RHO                         # m^3 volume 
-    volume_iz:float = 3 * 1e6                          # m^5 volum moment of inertia -> Computed assuming Viz ~ V * (b^2 + loa^2) using similarity laws with Revolt vessel
-                                                        
+    volume_iz:float = 3 * 1e6                           # m^5 volum moment of inertia -> Computed assuming Viz ~ V * (b^2 + loa^2) using similarity laws with Revolt vessel
+
+    # Wind coefficients                                     
+    cx: float = 0.5
+    cy: float = 0.7
+    cn: float = 0.08
 
     R44: float = 0.36 * beam                            # radii of gyration (m)
     R55: float = 0.26 * loa
@@ -285,7 +292,34 @@ class AuroraFerry(IVessel):
         - Stern starboard   (xy=[-1.65, 0.15])
         - Bow               (xy=[1.15, 0.0])
         """
-        disturbance = np.array([0, 0, 0]) # Define it as a function of current, wind
+
+        # Wind perturbations
+        uw = wind.u(self.eta.yaw)
+        vw = wind.v(self.eta.yaw)
+
+        u_rw = uw - self.nu.u
+        v_rw = vw - self.nu.v
+
+        gamma_w = wind.gamma_w(self.eta.yaw)
+        wind_rw2 = u_rw**2 + v_rw**2
+        c_x = -self.vessel_params.cx * np.cos(gamma_w)
+        c_y = self.vessel_params.cy * np.sin(gamma_w)
+        c_n = self.vessel_params.cn * np.sin(2 * gamma_w)
+
+        tau_coeff = 0.5 * wind.get_air_density() * wind_rw2
+        tau_w = np.array([
+            tau_coeff * c_x * self.vessel_params.proj_area_f,
+            tau_coeff * c_y * self.vessel_params.proj_area_l,
+            tau_coeff * c_n * self.vessel_params.proj_area_l * self.vessel_params.loa
+        ]) 
+
+        # Current perturbations
+        v_c = np.array([current.u(self.eta.yaw), current.v(self.eta.yaw), 0]) # current speed in ship frame
+        tau_c_coriolis = self.vessel_params.CA(self.nu.uvr) @ self.nu.uvr - self.vessel_params.CA(self.nu.uvr - v_c) @ (self.nu.uvr - v_c) # cancel CA(nu) @ nu and add CA(nu_r) @ nu_r
+        tau_c_damping = self.vessel_params.D @ v_c
+        tau_c = tau_c_coriolis + tau_c_damping
+
+        disturbance = tau_w + tau_c # Define it as a function of current, wind
         theta = theta if theta is not None else np.array(self.dynamics.nt * [1.0])
         x = self.dynamics.fd(self.states, control_commands, theta, disturbance).flatten()
         return x

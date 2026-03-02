@@ -39,16 +39,18 @@ class TrajTrackingEnv(gym.Env):
             self,
             own_vessel:AuroraFerry,
             target_vessels:List[IVessel] = [],
-            obstacles:List[Obstacle] = [],
-            wind:Optional[Wind] = None,
-            current:Optional[Current] = None,    
+            obstacles:List[Obstacle] = [], 
             render_mode:Optional[Literal['human']] = None,
             map_bounds: float = 1e3,
             path_params: Dict = DEFAULT_PATH_PARAMS,
             V_range: Optional[Tuple[float, float]] = None,
             n_wpts: int = 5,
             wpts_space_multiplicator: int = 10,
-            initial_angle_range: Tuple[float, float] = (-30, 30)
+            initial_angle_range: Tuple[float, float] = (-30, 30),
+            wind_speed_range = (0, 20),
+            wind_angle_range = (-np.pi, np.pi),
+            current_speed_range = (0, 2),
+            current_angle_range = (-np.pi, np.pi)
     ):
         """
         Gymnasium navigation environment for vessel control.
@@ -64,14 +66,16 @@ class TrajTrackingEnv(gym.Env):
         self.own_vessel = own_vessel
         self.target_vessels = target_vessels
         self.obstacles = obstacles
-        self.wind = wind or Wind(0, 0)
-        self.current = current or Current(0, 0)
         self.map_bounds = map_bounds
         self.path_params = path_params
         self.V_range = V_range if V_range is not None else (0, self.own_vessel.vessel_params.surge_speed_max)
         self.n_wpts = n_wpts
         self.wpts_space_multiplicator = wpts_space_multiplicator
         self.initial_angle_range = initial_angle_range
+        self.wind_speed_range = wind_speed_range
+        self.wind_angle_range = wind_angle_range
+        self.current_speed_range = current_speed_range
+        self.current_angle_range = current_angle_range
 
         self.init_action_space()
         self.init_observation_space()
@@ -88,22 +92,6 @@ class TrajTrackingEnv(gym.Env):
         # Current step (for plot purpose)
         self._step = 0
         self.max_steps = 500 # i.e. 100 seconds for dt=0.02 and action_repeat=10
-
-        # Reward function
-        self.huber_penalty_slope = 10 # delta
-        self.huber_penalty_weight = 30 # q_x,y
-        self.heading_penalty_weight = 50 # 50 # q_psi
-        self.singular_value_penalty = 1e-3 # epsilon -> for nonsigular thruster configuration
-        self.singular_value_weight = 1e-5 # 1e-5 # rho -> for nonsigular thruster configuration
-
-        self.Q = np.array([
-            [10, 0, 0],
-            [0, 10, 0],
-            [0, 0, 10]
-        ]) # Velocity weight matrix
-
-        self.Ra = np.eye(4) * 1e-2 # Azimuth weight matrix
-        self.Rf = np.eye(4) * 1e-8 # 1e-1 # Force weight matrix
 
     def reset(self, seed: int | None = None, options: Dict | None = None) -> Tuple[Dict, Dict]:
         """
@@ -128,6 +116,16 @@ class TrajTrackingEnv(gym.Env):
         # self.target = self.np_random.uniform(-self.map_bounds/2, self.map_bounds/2, size=2)
         self.path = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed)
         self.V_des = float(self.np_random.uniform(*self.V_range))
+
+        # Sample wind current values
+        self.wind = Wind(
+            self.np_random.uniform(*self.wind_angle_range),
+            self.np_random.uniform(*self.wind_speed_range)
+        )
+        self.current = Current(
+            self.np_random.uniform(*self.current_angle_range),
+            self.np_random.uniform(*self.current_speed_range)
+        )
 
         observation = self._get_obs()
         info = self._get_info()
@@ -175,46 +173,6 @@ class TrajTrackingEnv(gym.Env):
         info = self._get_info()
 
         return observation, reward, terminated, truncated, info
-
-    def cost_tracking(self, p:np.ndarray, p_d:np.ndarray) -> float:
-        return float(self.huber_penalty_slope**2 * (np.sqrt(1 + ((p[0:2]-p_d[0:2]).T @ (p[0:2]-p_d[0:2])) / self.huber_penalty_slope**2) - 1))
-    
-    def cost_heading(self, psi:float, psi_d:float) -> float:
-        return float((1 - np.cos(psi - psi_d)) / 2)
-    
-    def cost_speed(self, nu:np.ndarray, nu_d:np.ndarray) -> float:
-        return float((nu-nu_d).T @ self.Q @ (nu-nu_d))
-    
-    def cost_alpha(self, alpha:np.ndarray) -> float:
-        return (alpha.T @ self.Ra @ alpha).astype(float)
-    
-    def cost_thruster_speed(self, thruster_speed:np.ndarray) -> float:
-        return (thruster_speed.T @ self.Rf @ thruster_speed).astype(float)
-    
-    # def cost_singular_alpha(self, alpha:np.ndarray) -> float:
-    #     return 0
-    
-    def cost(self, eta:np.ndarray, nu:np.ndarray, eta_d:np.ndarray, nu_d:np.ndarray, alpha:np.ndarray, thruster_speed:np.ndarray) -> float:
-        cost = self.huber_penalty_weight * self.cost_tracking(eta[0:2], eta_d[0:2])
-        cost += self.heading_penalty_weight * self.cost_heading(eta[2], eta_d[2])
-        cost += self.singular_value_weight * 0
-        cost += self.cost_speed(nu, nu_d)
-        cost += self.cost_alpha(alpha)
-        cost += self.cost_thruster_speed(thruster_speed)
-        return cost
-
-    # def reward(self) -> float:
-    #     """
-    #     Compute reward based on distance to target, power consumption and fault diagnosis performance (to be implemented)
-        
-    #     Returns:
-    #         float: Reward value (higher is better)
-    #     """
-    #     eta = np.array(self.own_vessel.eta.neyaw)
-    #     nu = np.array(self.own_vessel.nu.uvr)
-    #     eta_d = np.array(self.path.get_target_wpts_from(eta[0], eta[1], 0, 1)[0]) # dp is wrong but we don't care because we only take the first point
-    #     nu_d = np.array([self.V_des, 0, 0])
-    #     return np.exp(-self.cost(eta, nu, eta_d, nu_d, self.own_vessel.states[12:16], self.own_vessel.states[16:20])/10)
 
     def reward(self) -> float:
         """
@@ -429,7 +387,7 @@ class TrajTrackingEnv(gym.Env):
             envelope_in_ned_frame = Rzyx(*self.own_vessel.eta.to_numpy()[3:6].tolist())[0:2, 0:2] @ envelope + self.own_vessel.eta.to_numpy()[0:2, None]
             actuator_plot.set_data(envelope_in_ned_frame[1, :], envelope_in_ned_frame[0, :])
 
-        self.ax.set_title(f"Step: {self._step} | Time: {self._step * self.action_repeat * self.own_vessel.dynamics.dt} | V_des: {self.V_des} | V: {np.linalg.norm(self.own_vessel.states[6:8])}")
+        self.ax.set_title(f"Step: {self._step} | Time: {self._step * self.action_repeat * self.own_vessel.dynamics.dt} | V_des: {self.V_des:.1f} | V: {np.linalg.norm(self.own_vessel.states[6:8]):.1f}")
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
     
@@ -470,8 +428,10 @@ def check_environment() -> None:
     obs, info = env.reset()
     
     for step in range(env.max_steps):
-        action = env.action_space.sample()  # Random action
-        # action = np.array([0, 0, 0.5, 0.5, 1, 1, 1, 1])
+        # action = env.action_space.sample()  # Random action
+        # action = np.array(8*[-1.])
+        action = np.array([0, 0, 0.0, 0.0, 1, 0, 0, 0])
+        # action = np.array([0, 0, 0.0, 0.0, 1, 1, 1, 1])
         obs, reward, terminated, truncated, info = env.step(action)
         env.render()
         
