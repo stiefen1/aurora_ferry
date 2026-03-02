@@ -62,11 +62,11 @@ class NavigationAurora(INavigation):
             Q: Optional[np.ndarray] = np.eye(4) * 1e-6, # Process noise
             R: Optional[np.ndarray] = np.eye(4), # measurement noise
             P0: np.ndarray = np.eye(4),
-            sensors = {'camera': Camera(), 'ais': AIS()},
+            sensors = None,
             max_age_seconds: Optional[float] = None,
             **kwargs
     ):
-        
+        sensors = sensors if sensors is not None else {'camera': Camera(), 'ais': AIS()}
         super().__init__(eta, nu, sensors, *args, **kwargs)
         self.target_tracker_params = {
             'Q': Q,
