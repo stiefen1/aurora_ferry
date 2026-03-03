@@ -185,7 +185,7 @@ class TrajTrackingEnv(gym.Env):
         """
         return (
             1 -
-            (self.dist_to_target()/500) -
+            (self.dist_to_target()/1000) - # / 500
             self.speed_error() / self.own_vessel.vessel_params.surge_speed_max -
             self.weighted_power_consumption()
         )
@@ -210,7 +210,7 @@ class TrajTrackingEnv(gym.Env):
             w = np.diag(np.concatenate([
                 10 / (self.own_vessel.actuator_params.alpha_max - self.own_vessel.actuator_params.alpha_min)**2,
                 1 / (self.own_vessel.actuator_params.speed_max - self.own_vessel.actuator_params.speed_min)**2,
-            ])) / 50.0
+            ])) / 100.0 # 50
         return float((self.own_vessel.states[12:20] @ w @ self.own_vessel.states[12:20]))
     
     def collision(self) -> bool:
