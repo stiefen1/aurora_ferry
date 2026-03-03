@@ -7,8 +7,10 @@ from python_vehicle_simulator.utils.math_fn import ssa
 from python_vehicle_simulator.utils.math_fn import Rzyx
 from python_vehicle_simulator.lib.thruster import ROTATION_MATRIX
 from python_vehicle_simulator.lib.path import PWLPath
+import json
 
 from src.aurora import AuroraFerry
+from src.utils.normalize import normalize
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
@@ -47,7 +49,7 @@ class TrajTrackingEnv(gym.Env):
             n_wpts: int = 5,
             wpts_space_multiplicator: int = 10,
             initial_angle_range: Tuple[float, float] = (-30, 30),
-            wind_speed_range = (0, 20),
+            wind_speed_range = (0, 20), # calm -> fresh gale
             wind_angle_range = (-np.pi, np.pi),
             current_speed_range = (0, 2),
             current_angle_range = (-np.pi, np.pi)
@@ -223,19 +225,6 @@ class TrajTrackingEnv(gym.Env):
                 return True
         return False
 
-    def _normalize(self, x, min_val, max_val):
-        """
-        Normalize x from [min_val, max_val] to [-1, 1].
-        
-        x:          Value to normalize
-        min_val:    Minimum value of range
-        max_val:    Maximum value of range
-        
-        Returns:
-            Normalized value in [-1, 1]
-        """
-        return 2 * (x - min_val) / (max_val - min_val) - 1
-
     def _get_obs(self) -> Dict:
         """
         Convert internal state to normalized observation format.
@@ -258,16 +247,14 @@ class TrajTrackingEnv(gym.Env):
         thruster_speeds = self.own_vessel.states[16:20]
 
         # Normalize each and cast to float32
-        ne_norm = self._normalize(ne, self.ne_range["min"], self.ne_range["max"]).astype(np.float32)
-        uvr_norm = self._normalize(uvr, self.uvr_range["min"], self.uvr_range["max"]).astype(np.float32)
-        rel_target_norm = self._normalize(np.array(distances), self.rel_target_range["min"], self.rel_target_range["max"]).astype(np.float32)
-        rel_yaw_norm = self._normalize(np.array(rel_yaws), self.rel_yaw_range["min"], self.rel_yaw_range["max"]).astype(np.float32)
-        speed_error_norm = self._normalize(np.array(self.own_vessel.nu.u - self.V_des), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
-        azimuth_angles_norm = self._normalize(azimuth_angles, self.azimuth_angles_range["min"], self.azimuth_angles_range["max"]).astype(np.float32)
-        thruster_speeds_norm = self._normalize(thruster_speeds, self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]).astype(np.float32)
+        uvr_norm = normalize(uvr, self.uvr_range["min"], self.uvr_range["max"]).astype(np.float32)
+        rel_target_norm = normalize(np.array(distances), self.rel_target_range["min"], self.rel_target_range["max"]).astype(np.float32)
+        rel_yaw_norm = normalize(np.array(rel_yaws), self.rel_yaw_range["min"], self.rel_yaw_range["max"]).astype(np.float32)
+        speed_error_norm = normalize(np.array(np.linalg.norm(uvr[0:2]) - self.V_des), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
+        azimuth_angles_norm = normalize(azimuth_angles, self.azimuth_angles_range["min"], self.azimuth_angles_range["max"]).astype(np.float32)
+        thruster_speeds_norm = normalize(thruster_speeds, self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]).astype(np.float32)
 
         return {
-            "ne": ne_norm,
             "uvr": uvr_norm,
             "rel_target": rel_target_norm,
             "rel_yaw": rel_yaw_norm,
@@ -286,7 +273,6 @@ class TrajTrackingEnv(gym.Env):
         # Observation space is normalized to enhance learning stability
         self.observation_space = gym.spaces.Dict(
             {
-                "ne": gym.spaces.Box(-1.0, 1.0, shape=(2,)),            # Because we want the vessel to remain within bounds
                 "uvr": gym.spaces.Box(-1.0, 1.0, shape=(3,)),           # Surge-Sway-YawRate
                 "rel_target": gym.spaces.Box(-1.0, 1.0, shape=(self.n_wpts,)),    # Easier to figure out using relative pose
                 "rel_yaw": gym.spaces.Box(-1.0, 1.0, shape=(self.n_wpts,)),
@@ -297,7 +283,6 @@ class TrajTrackingEnv(gym.Env):
         )
 
         # Used to map normalized observations to actual values (see method get_obs)
-        self.ne_range = {"min": np.array(2*[-self.path_params['d_tot']]), "max": np.array(2*[self.path_params['d_tot']])}
         self.uvr_range = {"min": np.array([-10, -10, -10]), "max": np.array([10, 10, 10])}
         self.rel_target_range = {"min":np.array(self.n_wpts*[0]), "max": np.array(self.n_wpts*[self.path_params['d_tot']])} # relative distance to a point of the horizon
         self.rel_yaw_range = {"min": np.array(self.n_wpts*[-np.pi]), "max": np.array(self.n_wpts*[np.pi])} # relative bearing angle to a point of the horizon
@@ -305,6 +290,50 @@ class TrajTrackingEnv(gym.Env):
         self.azimuth_angles_range = {"min": self.own_vessel.actuator_params.alpha_min, "max": self.own_vessel.actuator_params.alpha_max}
         self.thruster_speeds_range = {"min": self.own_vessel.actuator_params.speed_min, "max": self.own_vessel.actuator_params.speed_max}
     
+    def export_observation_space_ranges_to(self, path: str) -> None:
+        """
+        Export observation space ranges to a JSON configuration file.
+        
+        Args:
+            path: File path where to save the JSON configuration
+        """
+        ranges_config = {
+            "uvr_range": {
+                "min": self.uvr_range["min"].tolist(),
+                "max": self.uvr_range["max"].tolist()
+            },
+            "rel_target_range": {
+                "min": self.rel_target_range["min"].tolist(),
+                "max": self.rel_target_range["max"].tolist()
+            },
+            "rel_yaw_range": {
+                "min": self.rel_yaw_range["min"].tolist(),
+                "max": self.rel_yaw_range["max"].tolist()
+            },
+            "speed_error_range": {
+                "min": self.speed_error_range["min"].tolist(),
+                "max": self.speed_error_range["max"].tolist()
+            },
+            "azimuth_angles_range": {
+                "min": self.azimuth_angles_range["min"].tolist(),
+                "max": self.azimuth_angles_range["max"].tolist()
+            },
+            "thruster_speeds_range": {
+                "min": self.thruster_speeds_range["min"].tolist(),
+                "max": self.thruster_speeds_range["max"].tolist()
+            },
+            "action_repeat": self.action_repeat,
+            "dt": self.own_vessel.dynamics.dt,
+            "wpts_space_multiplicator": self.wpts_space_multiplicator,
+            "n_wpts": self.n_wpts
+        }
+        
+        with open(path, 'w') as f:
+            json.dump(ranges_config, f, indent=4)
+        
+        print(f"Observation space ranges exported to: {path}")
+
+
     def _get_info(self) -> Dict:
         """
         Compute auxiliary information for debugging.
@@ -326,8 +355,8 @@ class TrajTrackingEnv(gym.Env):
             Command for vessel actuators [azimuth, speeds]
         """
         command = np.zeros_like(action)
-        alpha_min, alpha_max = self.own_vessel.actuator_params.alpha_min, self.own_vessel.actuator_params.alpha_max
-        thruster_speed_min, thruster_speed_max = self.own_vessel.actuator_params.speed_min, self.own_vessel.actuator_params.speed_max
+        alpha_min, alpha_max = self.azimuth_angles_range["min"], self.azimuth_angles_range["max"]
+        thruster_speed_min, thruster_speed_max = self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]
         command[0:4] = action[0:4] * (alpha_max - alpha_min) / 2 + (alpha_min + alpha_max) / 2
         command[4:8] = action[4:8] * (thruster_speed_max - thruster_speed_min) / 2 + (thruster_speed_min + thruster_speed_max) / 2
         return command
@@ -426,6 +455,9 @@ def check_environment() -> None:
 
     # Run an episode
     obs, info = env.reset()
+    
+    # Export ranges for controller (optional)
+    env.export_observation_space_ranges_to("observation_space_ranges.json")
     
     for step in range(env.max_steps):
         # action = env.action_space.sample()  # Random action
