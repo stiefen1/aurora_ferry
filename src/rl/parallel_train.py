@@ -1,5 +1,6 @@
 from env import GymNavEnv
 from traj_tracking_env import TrajTrackingEnv
+from navigation import NavigationAurora
 
 import gymnasium as gym
 from stable_baselines3.ppo import PPO
@@ -18,15 +19,25 @@ name_prefix = "aurora"
 dt = 0.2
 
 def make_env():
-    revolt = AuroraFerry(dt)
+    revolt = AuroraFerry(
+        dt=dt,
+    )
+    navigation=NavigationAurora(
+        revolt.states,
+        dt=dt
+    )
+
+    revolt.navigation = navigation
     env = TrajTrackingEnv(
-        own_vessel=revolt
+        own_vessel=revolt,
+        n_wpts=3,
+        wpts_space_multiplicator=20
     )
     return gym.wrappers.FlattenObservation(env) # Needed for Dict observation space
 
 
 if __name__ == '__main__':
-    n_envs = 8
+    n_envs = 4
     vec_env = make_vec_env(make_env, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
 

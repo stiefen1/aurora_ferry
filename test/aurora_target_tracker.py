@@ -1,6 +1,6 @@
 from python_vehicle_simulator.lib.simulator import Simulator
 from python_vehicle_simulator.lib.env import NavEnv
-from python_vehicle_simulator.lib.weather import Current
+from python_vehicle_simulator.lib.weather import Current, Wind
 from python_vehicle_simulator.utils.unit_conversion import DEG2RAD
 from python_vehicle_simulator.lib.map import RandomMapGenerator
 from python_vehicle_simulator.lib.actuator import AzimuthThruster
@@ -9,6 +9,7 @@ from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec
 import numpy as np, matplotlib.pyplot as plt
 from src.aurora import SingleAzimuthThrusterParameters, AuroraFerry
 from src.navigation import NavigationAurora
+from src.guidance import TimespaceGuidance
 from src.ais import AIS
 from datetime import datetime, timedelta
 from src.map import HelsingborgMap
@@ -18,32 +19,14 @@ import colav, logging
 colav.configure_logging(level=logging.INFO)
 
 
-dt = 2
+dt = 1
 helsingborg = HelsingborgMap()
 center = helsingborg.center_utm_ne
 goal_ne = helsingborg.helsingborg_coords_ne
 start_ne = helsingborg.helsingor_coords_ne
 u_des = 5
-eta0 = (start_ne[0], start_ne[1]-100, 0, 0, 0, np.deg2rad(80)) # (center[0], center[1], 0, 0, 0, 0)
-nu0 = (u_des, 0, 0, 0, 0, 0)
-
-ferry = AuroraFerry(
-        eta0=eta0,
-        nu0=nu0,
-        dt=dt,
-        actuators=[
-            AzimuthThruster(xy=(-35, -9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(-35, 9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(35, -9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(35, 9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters()))
-        ],
-        navigation=NavigationAurora(
-            eta=np.array(eta0),
-            nu=np.array(nu0),
-            dt=dt,
-            max_age_seconds=dt
-        )
-    )
+eta0 = (start_ne[0], start_ne[1]-100, np.deg2rad(80)) # (center[0], center[1], 0, 0, 0, 0)
+nu0 = (u_des, 0, 0)
 
 ais = AIS()
 # t0 = ais.get_first_timestamp()
@@ -54,8 +37,6 @@ n_sim = int((tf - t0).seconds / dt)
 t = t0
 print("final time: ", tf, " sec: ", tf.second)
 print("initial time: ", t0, "sec: ", t0.second)
-
-
 
 # Enable interactive mode for real-time plotting
 plt.ion()
@@ -71,6 +52,19 @@ ax.set_ylim(helsingborg.ylim)
 
 for name, route in helsingborg.get_ferry_routes().items():
     route.plot(ax=ax, label=name)
+    print(name, route.waypoints[0])
+
+ferry = AuroraFerry(
+        dt,
+        eta=eta0,
+        nu=nu0,
+        navigation=NavigationAurora(
+            states=np.array([*eta0[0:2], 0, 0, 0, eta0[2], *nu0[0:2], 0, 0, 0, nu0[2], 0, 0, 0, 0, 0, 0, 0, 0]),
+            dt=dt,
+            max_age_seconds=dt
+        )
+    )
+
 
 # Initialize dynamic plot elements
 vessels_artists = []
@@ -85,7 +79,7 @@ for step in range(n_sim):
     print(f"Step {step}/{n_sim} | t={t} | n={ferry.eta.n:.1f} | e={ferry.eta.e:.1f}")
     
     # Update simulation
-    ferry.step(None, None, [], [], control_commands=4*[np.array([0, 1e6])], timestamp=t)
+    ferry.step(Current(0, 0), Wind(0, 0), [], [], control_commands=np.array(4*[0.0] + 4*[1e3]), timestamp=t)
     
     # Remove old vessel artists
     for artist in vessels_artists:

@@ -57,13 +57,13 @@ class AuroraFerryActuatorsParameters:
 
     def __post_init__(self):
         self.thrusters = [SingleAzimuthThrusterParameters(), SingleAzimuthThrusterParameters(), SingleAzimuthThrusterParameters(), SingleAzimuthThrusterParameters()]  
-        self.k_pos: np.ndarray = np.array([thruster.k_pos for thruster in self.thrusters])    # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
-        self.k_neg: np.ndarray = np.array([thruster.k_neg for thruster in self.thrusters])    # Negative Bollard, one propeller
-        self.f_max: np.ndarray = np.array([thruster.f_max for thruster in self.thrusters])    # Max positive force, one propeller
+        self.k_pos: np.ndarray = np.array([thruster.k_pos for thruster in self.thrusters])      # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
+        self.k_neg: np.ndarray = np.array([thruster.k_neg for thruster in self.thrusters])      # Negative Bollard, one propeller
+        self.f_max: np.ndarray = np.array([thruster.f_max for thruster in self.thrusters])      # Max positive force, one propeller
         self.f_min: np.ndarray = np.array([thruster.f_min for thruster in self.thrusters]) 
         self.speed_min = np.array([thruster.speed_min for thruster in self.thrusters])
         self.speed_max = np.array([thruster.speed_max for thruster in self.thrusters])          # Thruster speed constraints
-        self.alpha_min = np.array([thruster.alpha_min for thruster in self.thrusters])                       # Azimuth angles constraints
+        self.alpha_min = np.array([thruster.alpha_min for thruster in self.thrusters])          # Azimuth angles constraints
         self.alpha_max = np.array([thruster.alpha_max for thruster in self.thrusters])
 
         self.xy = np.array([[-45, -9.4], [-45, 9.4], [25, 9.4], [25, -9.4]]) # np.array([[-35, -9.4], [-35, 9.4], [35, 9.4], [35, -9.4]])    
@@ -332,7 +332,7 @@ class AuroraFerry(IVessel):
         """
         ax.scatter(self.eta[1], self.eta[0], *args, **kwargs)
         ax.plot(*self.geometry_for_2D_plot, *args, **kwargs)
-        for i in range(3):
+        for i in range(4):
             envelope = (ROTATION_MATRIX(self.states[12 + i]) @ self.actuator_params.geometries[i].T) + self.actuator_params.xy[i].reshape(-1, 1)
             envelope_in_ned_frame = Rzyx(*self.eta.to_numpy()[3:6].tolist())[0:2, 0:2] @ envelope + self.eta.to_numpy()[0:2, None]
             ax.plot(envelope_in_ned_frame[1, :], envelope_in_ned_frame[0, :], *args, **kwargs)
