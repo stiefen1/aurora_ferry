@@ -37,7 +37,7 @@ def make_env():
 
 
 if __name__ == '__main__':
-    n_envs = 4
+    n_envs = 8
     vec_env = make_vec_env(make_env, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
 
