@@ -80,7 +80,7 @@ class NavigationAurora(INavigation):
             seed: Optional[int] = None,
             **kwargs
     ):
-        sensors = sensors if sensors is not None else {'camera': Camera(), 'ais': AIS()}
+        sensors = sensors if sensors is not None else {} # {'camera': Camera(), 'ais': AIS()}
             
         self.target_tracker_params = {
             'Q': Q_tt,
@@ -174,7 +174,7 @@ class NavigationAurora(INavigation):
         states_meas = self.measure_states(states)
         states_estimation = self.state_estimator(control_commands, states_meas) # TODO: add wind, current measurements to state estimator
 
-        if timestamp is not None:
+        if timestamp is not None and "ais" in self.sensors.keys():
             updated_vessels, info = self.measure_target_vessels(timestamp)
         else:
             updated_vessels, info = [], {}
