@@ -1,6 +1,6 @@
 from env import GymNavEnv
 from traj_tracking_env import TrajTrackingEnv
-from navigation import NavigationAurora
+from src.navigation import NavigationAurora
 
 import gymnasium as gym
 from stable_baselines3.ppo import PPO
