@@ -123,6 +123,9 @@ class NavigationAurora(INavigation):
     
     def measure_target_vessels(self, timestamp: datetime) -> Tuple[List[Vessel], Dict]:
         ais = self.sensors['ais'](timestamp=timestamp, max_age_seconds=self.max_age_seconds)
+        # camera = self.sensors['camera'](timestamp=timestamp, max_age_seconds=self.max_age_seconds)
+
+        
         vessels_ais: List[Vessel] = ais[0] # Done in this way to specify type explicitely
         info_ais: Dict = ais[1]
 

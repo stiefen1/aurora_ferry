@@ -1,4 +1,4 @@
-from env import GymNavEnv
+from traj_tracking_env import TrajTrackingEnv
 
 import gymnasium as gym
 from stable_baselines3.ppo import PPO
@@ -18,7 +18,7 @@ name_prefix = "aurora"
 
 dt = 0.2
 revolt = AuroraFerry(dt)
-env = GymNavEnv(
+env = TrajTrackingEnv(
     own_vessel=revolt
 )
 

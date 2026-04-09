@@ -13,6 +13,7 @@ from src.aurora import AuroraFerry
 from src.utils.normalize import normalize
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from src.odm import ODM
 
 
 
@@ -49,10 +50,10 @@ class TrajTrackingEnv(gym.Env):
             V_range: Optional[Tuple[float, float]] = None,
             n_wpts: int = 5,
             wpts_space_multiplicator: int = 10,
-            initial_angle_range: Tuple[float, float] = (-30, 30),
+            initial_angle_range: Tuple[float, float] = (-180, 180),
             wind_speed_range: Tuple = (0, 20), # calm -> fresh gale
             wind_angle_range: Tuple = (-np.pi, np.pi),
-            current_speed_range: Tuple = (0, 2),
+            current_speed_range: Tuple = (0, 2), # m/s -> can reach 4 kts = 2 m/s around Helsingborg 
             current_angle_range: Tuple = (-np.pi, np.pi)
     ):
         """
@@ -111,13 +112,22 @@ class TrajTrackingEnv(gym.Env):
         self.np_random, _ = gym.utils.seeding.np_random(seed) # type: ignore
 
         # Reset own vessel position to 0
-        self.own_vessel.reset(seed=seed)
+        x_init_min = np.array([-300, -300, 0, 0, 0, -np.pi, 
+                               -self.V_range[1], -self.V_range[1]/10, 0, 0, 0, -1,
+                               *self.azimuth_angles_range["min"],
+                               *self.thruster_speeds_range["min"]])
+        x_init_max = np.array([300, 300, 0, 0, 0, np.pi, 
+                               self.V_range[1], self.V_range[1]/10, 0, 0, 0, 1,
+                               *self.azimuth_angles_range["max"],
+                               *self.thruster_speeds_range["max"]])
+        self.own_vessel.reset(random=True, seed=seed, x_min=x_init_min, x_max=x_init_max)
         for target_vessel in self.target_vessels:
             target_vessel.reset()
 
         # Sample a new target position within map bounds
         self.path = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed)
         self.V_des = float(self.np_random.uniform(*self.V_range))
+        self.current_waypoint = 1
 
         # Sample wind current values
         self.wind = Wind(
@@ -173,6 +183,10 @@ class TrajTrackingEnv(gym.Env):
         truncated = self._step >= self.max_steps
         
         info = self._get_info()
+
+        if self.path.get_current_waypoint(*self.own_vessel.states[0:2]) > self.current_waypoint: # Update speed when we switch to next waypoint
+            self.V_des = float(self.np_random.uniform(*self.V_range))
+            self.current_waypoint += 1
 
         return observation, reward, terminated, truncated, info
 

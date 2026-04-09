@@ -1,9 +1,21 @@
 from python_vehicle_simulator.lib.noise import INoise
 from python_vehicle_simulator.lib.sensor import ISensor
-import numpy as np, os
+import numpy as np, os, pandas as pd
 from typing import Tuple, Dict, List, Optional, LiteralString, Any
 from datetime import datetime
-import pandas as pd
+from src.weather import Weather, is_target_detected
+
+
+"""
+Uncertainties will be parameterized by:
+- weather type
+- distance of the target vessel w.r.t ferry
+
+First detection should be parameterized by distance, weather and target ship size
+
+We probably assume the detector does not provide a good distance measure of target ship, or even no distance at all -> (AIS data are needed)
+
+"""
 
 
 class Camera(ISensor):
@@ -29,3 +41,4 @@ class Camera(ISensor):
         data_at_t, success = self.query(t)
         info = {'status': success}
         return [], info
+    

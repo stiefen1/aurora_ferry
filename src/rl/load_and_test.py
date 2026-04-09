@@ -6,7 +6,7 @@ from src.aurora import AuroraFerry
 from src.rl.traj_tracking_env import TrajTrackingEnv
 
 alg = "ppo"
-data_and_time = "hpc"
+data_and_time = "2026_04_09_13_05_32" # "hpc"
 weights_name = "aurora_900000_steps"
 
 
@@ -22,7 +22,8 @@ env.max_steps = 100
 env = gym.wrappers.FlattenObservation(env)
 
 # Load trained PPO model
-model = PPO.load(os.path.join("models", alg, data_and_time, weights_name))
+model = PPO.load(os.path.join("checkpoints", alg, data_and_time, weights_name))
+# model = PPO.load(os.path.join("models", alg, data_and_time, weights_name))
 
 # Run episode using trained model
 obs, info = env.reset()
