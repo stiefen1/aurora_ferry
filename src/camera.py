@@ -1,8 +1,9 @@
 from python_vehicle_simulator.lib.noise import INoise
 from python_vehicle_simulator.lib.sensor import ISensor
-import numpy as np, os, pandas as pd
+import numpy as np, os, pandas as pd, numpy.typing as npt
 from typing import Tuple, Dict, List, Optional, LiteralString, Any
 from datetime import datetime
+from src import weather
 from src.weather import Weather, is_target_detected
 
 
@@ -41,4 +42,41 @@ class Camera(ISensor):
         data_at_t, success = self.query(t)
         info = {'status': success}
         return [], info
+    
+
+def get_camera_covariance(distance: float | npt.NDArray, weather: Weather) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
+    """
+    Return covariance of relative bearing angle (rad^2) and distance (m^2) depending on distance and weather.
+
+    Target size is not taken into account for now. 
+    """
+    slope_cov_gamma = 1e-4
+    slope_cov_dist = 1e-2
+    match weather:
+        case Weather.SUNNY:
+            cov_gamma_0 = 1e-2
+            cov_dist_0 = 5
+        case Weather.CLOUDY:
+            cov_gamma_0 = 3e-2
+            cov_dist_0 = 10
+        case Weather.FOGGY:
+            cov_gamma_0 = 5e-2
+            cov_dist_0 = 15
+        case _:
+            raise ValueError(f"Invalid weather {weather}")
+    return (slope_cov_gamma * distance + cov_gamma_0, slope_cov_dist * distance + cov_dist_0)
+
+if __name__ == "__main__":
+    import numpy as np, matplotlib.pyplot as plt
+    distance = np.linspace(0, 3000, 300)
+
+    fig, axs = plt.subplots(1, 2)
+    for w in [Weather.SUNNY, Weather.CLOUDY, Weather.FOGGY]:
+        axs[0].plot(distance, np.rad2deg(get_camera_covariance(distance, w)[0]), label=f'{w}')
+        axs[1].plot(distance, get_camera_covariance(distance, w)[1], label=f'{w}')
+
+    axs[0].set_title(f"bearing covariance")
+    axs[1].set_title(f"distance covariance")
+    plt.legend()
+    plt.show()
     
