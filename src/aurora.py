@@ -94,14 +94,16 @@ class AuroraFerryParameters:
     ## (2) https://www.ferry-site.dk/ferry.php?id=9007128&lang=en
 
     ## Mass & Payload
-    GT: float = 10918                                   # Gross tonnage (1)
-    NT: float = 3275                                    # Net tonnage (1)
-    DWT: float = 2250                                   # Dead-Weight Tonnage (1)
-    m: float = DWT * 1e3                                # Mass (kg)
-    # n_passengers: int = 500                             # Max number of passenger is 1'250
-    # n_cars: int = 150                                   # Max number of cars is 250
-    # mp: float = n_passengers * 78 + n_cars * 1200       # Payload mass (kg)
-    mp: float = 0
+    # GT: float = 10918                                   # Gross tonnage (1)
+    # NT: float = 3275                                    # Net tonnage (1)
+    # DWT: float = 2250                                   # Dead-Weight Tonnage (1)
+    m: float = 2250 * 1e3                               # Mass (kg) -> m = 2'250'000
+    n_passengers: int = 0                               # Max number of passenger is 1'250 -> m = 100'000
+    n_cars: int = 0                                     # Max number of cars is 240 -> m = 280'000
+    passenger_mean_mass: float = 78.0
+    passenger_dmass: float = 0.0                        # Additional average mass due to uncertainties
+    car_mean_mass: float = 1200
+    car_dmass: float = 0.0                              # Additional average mass due to uncertainties
     
 
     Nx: int = 3
@@ -109,9 +111,6 @@ class AuroraFerryParameters:
     beam: float = 28.2                                  # Beam (m)      
     initial_draft:float = 5.5                           # Initial draft
     mean_height_above_water: float = 15.0                    
-    proj_area_f: float = mean_height_above_water * beam
-    proj_area_l: float = mean_height_above_water * loa
-    volume:float = (m+mp) / RHO                         # m^3 volume 
     volume_iz:float = 3 * 1e6                           # m^5 volum moment of inertia -> Computed assuming Viz ~ V * (b^2 + loa^2) using similarity laws with Revolt vessel
 
     # Wind coefficients                                     
@@ -133,8 +132,15 @@ class AuroraFerryParameters:
     ubx: np.ndarray = field(default_factory=lambda: np.array([INF, INF, pi, knot_to_m_per_sec(14.9), 3, pi/6]))
 
     def __post_init__(self):
+        self.mp: float = self.n_passengers * (self.passenger_mean_mass + self.passenger_dmass) + self.n_cars * (self.car_mean_mass + self.car_dmass)       # Payload mass (kg) -> passengers and cars lead to ~+-10% inertia variation
+        self.mp_estimated: float = self.n_passengers * self.passenger_mean_mass + self.n_cars * self.car_mean_mass
+        self.volume:float = (self.m+self.mp) / RHO                         # m^3 volume 
         self.m_tot = self.m + self.mp
+        self.m_tot_estimated = self.m + self.mp_estimated
         self.rg = (self.m * self.rg + self.mp * self.rp) / (self.m + self.mp) # corrected center of gravity with payload
+
+        self.proj_area_f: float = self.mean_height_above_water * self.beam
+        self.proj_area_l: float = self.mean_height_above_water * self.loa
 
         # Basic calculations
         self.Xudot, self.Yvdot, self.Yrdot, self.Nvdot = (-self.volume*RHO*np.array([0.0253, 0.1802, 0.0085 * self.loa, 0.0099 * self.loa**2])).tolist()
@@ -185,15 +191,16 @@ class AuroraFerryParameters:
         ])
 
 class Aurora3Dynamics(IDynamics):
-    vessel_params = AuroraFerryParameters()
-    actuator_params = AuroraFerryActuatorsParameters()
-
     def __init__(
             self,
             dt: float,
             *args,
+            vessel_params: Optional[AuroraFerryParameters] = None,
+            actuator_params: Optional[AuroraFerryActuatorsParameters] = None,
             **kwargs
     ):
+        self.vessel_params = vessel_params or AuroraFerryParameters()
+        self.actuator_params = actuator_params or AuroraFerryActuatorsParameters()
         nx, nu, np, nd = 20, 8, 8, 3
         super().__init__(nx, nu, np, nd, dt, *args, **kwargs)
 
@@ -230,9 +237,6 @@ class Aurora3Dynamics(IDynamics):
         return x_dot
 
 class AuroraFerry(IVessel):
-    vessel_params = AuroraFerryParameters()
-    actuator_params = AuroraFerryActuatorsParameters()
-
     def __init__(
             self,
             dt: float,
@@ -245,7 +249,12 @@ class AuroraFerry(IVessel):
             control: Optional[IControl] = None,
             diagnosis: Optional[IDiagnosis] = None,
             mmsi: Optional[str] = None,
-            verbose_level: int = 0
+            verbose_level: int = 0,
+            mass: float = 2_250_000,
+            n_passengers: int = 0,
+            n_cars: int = 0,
+            passenger_dmass: float = 0.0,
+            car_dmass: float = 0.0,
     ):
         """
         Aurora autonomous ferry with 3DOF dynamics.
@@ -261,10 +270,13 @@ class AuroraFerry(IVessel):
         verbose_level:  Verbosity level for logging
         """
 
+        self.vessel_params = AuroraFerryParameters(m=mass, n_passengers=n_passengers, n_cars=n_cars, passenger_dmass=passenger_dmass, car_dmass=car_dmass)
+        self.actuator_params = AuroraFerryActuatorsParameters()
+
         super().__init__(
             self.vessel_params.loa,
             self.vessel_params.beam,
-            Aurora3Dynamics(dt),
+            Aurora3Dynamics(dt, vessel_params=self.vessel_params, actuator_params=self.actuator_params),
             states=(eta[0], eta[1], 0, 0, 0, eta[2], nu[0], nu[1], 0, 0, 0, nu[2], *azimuth_angles, *thruster_speeds),
             guidance=guidance,
             navigation=navigation,
