@@ -80,7 +80,7 @@ class TrajTrackingEnv(gym.Env):
         self.initial_angle_range = initial_angle_range
         self.odm = odm or ODM()
 
-        self.wind_speed_range = self.odm.wind["speed"]
+        self.wind_speed_range = self.odm.wind["speed"] # range for observations -> fine even though actual wind will sometimes gets out of the range
         self.wind_angle_range = self.odm.wind["angle"]
         self.current_speed_range = self.odm.current["speed"]
         self.current_angle_range = self.odm.current["angle"]
@@ -172,11 +172,23 @@ class TrajTrackingEnv(gym.Env):
         # Sample wind current values
         self.wind = Wind(
             self.np_random.uniform(self.wind_angle_range["min"], self.wind_angle_range["max"]),
-            self.np_random.uniform(self.wind_speed_range["min"], self.wind_speed_range["max"])
+            self.np_random.uniform(self.wind_speed_range["min"], self.wind_speed_range["max"]),
+            attraction_beta=self.odm.wind["angle"]["ornstein-uhlenbeck"]["attraction"],
+            amplitude_beta=self.odm.wind["angle"]["ornstein-uhlenbeck"]["amplitude"],
+            attraction_norm=self.odm.wind["speed"]["ornstein-uhlenbeck"]["attraction"],
+            amplitude_norm=self.odm.wind["angle"]["ornstein-uhlenbeck"]["amplitude"],
+            dt=self.dt,
+            seed=seed
         )
         self.current = Current(
             self.np_random.uniform(self.current_angle_range["min"], self.current_angle_range["max"]),
-            self.np_random.uniform(self.current_speed_range["min"], self.current_speed_range["max"])
+            self.np_random.uniform(self.current_speed_range["min"], self.current_speed_range["max"]),
+            attraction_beta=self.odm.current["angle"]["ornstein-uhlenbeck"]["attraction"],
+            amplitude_beta=self.odm.current["angle"]["ornstein-uhlenbeck"]["amplitude"],
+            attraction_norm=self.odm.current["speed"]["ornstein-uhlenbeck"]["attraction"],
+            amplitude_norm=self.odm.current["angle"]["ornstein-uhlenbeck"]["amplitude"],
+            dt=self.dt,
+            seed=seed
         )
 
         observation = self._get_obs()
@@ -208,7 +220,9 @@ class TrajTrackingEnv(gym.Env):
             for vessel in self.target_vessels:
                 vessel.step(self.current, self.wind, self.obstacles, [])
             self.own_vessel.step(self.current, self.wind, self.obstacles, self.target_vessels, control_commands=self.map_action_to_command(action), theta=np.array(8*[1.0]))
-
+            self.wind.step()
+            self.current.step()
+        
         # Reward result of action
         reward = self.reward()
 
@@ -333,8 +347,8 @@ class TrajTrackingEnv(gym.Env):
         speed_error_norm = normalize(np.array([np.linalg.norm(uvr[0:2]) - self.V_des]), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
         azimuth_angles_norm = normalize(azimuth_angles, self.azimuth_angles_range["min"], self.azimuth_angles_range["max"]).astype(np.float32)
         thruster_speeds_norm = normalize(thruster_speeds, self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]).astype(np.float32)
-        wind_speed_norm = normalize(np.array([wind.norm]), self.wind_speed_range["min"], self.wind_speed_range["max"]).astype(np.float32)
-        wind_angle_norm = normalize(np.array([wind.beta]), self.wind_angle_range["min"], self.wind_angle_range["max"]).astype(np.float32)
+        wind_speed_norm = normalize(np.array([wind._norm_0]), self.wind_speed_range["min"], self.wind_speed_range["max"]).astype(np.float32)
+        wind_angle_norm = normalize(np.array([wind._beta_0]), self.wind_angle_range["min"], self.wind_angle_range["max"]).astype(np.float32)
         current_speed_norm = normalize(np.array([current.norm]), self.current_speed_range["min"], self.current_speed_range["max"]).astype(np.float32)
         current_angle_norm = normalize(np.array([current.beta]), self.current_angle_range["min"], self.current_angle_range["max"]).astype(np.float32)
         total_mass_norm = normalize(np.array([self.own_vessel.vessel_params.m_tot_estimated]), self.total_mass_range["min"], self.total_mass_range["max"]).astype(np.float32)
@@ -520,8 +534,28 @@ class TrajTrackingEnv(gym.Env):
             self.ax.set_xlabel('East')
             self.ax.set_ylabel('North')
 
-            self.wind.plot(ax=self.ax, color='red')
-            self.current.plot(ax=self.ax, color='blue')
+            # Create arrow plots for wind and current using axis coordinates
+            wind_coords = self.wind.get_arrow_coords(self.ax, 0)
+            current_coords = self.current.get_arrow_coords(self.ax, 1)
+            
+            self.wind_arrow = self.ax.annotate('', xy=(wind_coords[2], wind_coords[3]), 
+                                              xytext=(wind_coords[0], wind_coords[1]),
+                                              xycoords='axes fraction', textcoords='axes fraction',
+                                              arrowprops=dict(arrowstyle='->', color='red', lw=2))
+            self.current_arrow = self.ax.annotate('', xy=(current_coords[2], current_coords[3]), 
+                                                 xytext=(current_coords[0], current_coords[1]),
+                                                 xycoords='axes fraction', textcoords='axes fraction',
+                                                 arrowprops=dict(arrowstyle='->', color='blue', lw=2))
+            
+            # Add text labels for wind and current
+            self.wind_text = self.ax.text(wind_coords[2] + 0.02, wind_coords[3] + 0.02,
+                                         f'Wind: {self.wind.norm:.1f} m/s',
+                                         transform=self.ax.transAxes, fontsize=10, color='red',
+                                         bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+            self.current_text = self.ax.text(current_coords[2] + 0.02, current_coords[3] + 0.02,
+                                            f'Current: {self.current.norm:.1f} m/s',
+                                            transform=self.ax.transAxes, fontsize=10, color='blue',
+                                            bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
                 
             self.ax.legend()
             plt.ion()
@@ -543,6 +577,21 @@ class TrajTrackingEnv(gym.Env):
             envelope = (ROTATION_MATRIX(self.own_vessel.states[12 + i]) @ self.actuators_params.geometries[i].T) + self.actuators_params.xy[i].reshape(-1, 1)
             envelope_in_ned_frame = Rzyx(*self.own_vessel.eta.to_numpy()[3:6].tolist())[0:2, 0:2] @ envelope + self.own_vessel.eta.to_numpy()[0:2, None]
             actuator_plot.set_data(envelope_in_ned_frame[1, :], envelope_in_ned_frame[0, :])
+
+        # Update wind and current arrows
+        wind_coords = self.wind.get_arrow_coords(self.ax, 0)
+        current_coords = self.current.get_arrow_coords(self.ax, 1)
+        
+        self.wind_arrow.xy = (wind_coords[2], wind_coords[3])
+        self.wind_arrow.xytext = (wind_coords[0], wind_coords[1])
+        self.current_arrow.xy = (current_coords[2], current_coords[3])
+        self.current_arrow.xytext = (current_coords[0], current_coords[1])
+        
+        # Update text labels
+        self.wind_text.set_position((wind_coords[2] + 0.02, wind_coords[3] + 0.02))
+        self.wind_text.set_text(f'Wind: {self.wind.norm:.1f} m/s')
+        self.current_text.set_position((current_coords[2] + 0.02, current_coords[3] + 0.02))
+        self.current_text.set_text(f'Current: {self.current.norm:.1f} m/s')
 
         self.ax.set_title(f"Step: {self._step} | Time: {self._step * self.action_repeat * self.dt} | V_des: {self.V_des:.1f} | V: {np.linalg.norm(self.own_vessel.states[6:8]):.1f}")
         self.fig.canvas.draw()
