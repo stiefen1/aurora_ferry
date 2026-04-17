@@ -6,18 +6,18 @@ from src.aurora import AuroraFerry
 from src.rl.traj_tracking_env import TrajTrackingEnv
 
 alg = "ppo"
-data_and_time = "2026_04_09_13_05_32" # "hpc"
-weights_name = "aurora_900000_steps"
+data_and_time = "2026_04_10_16_20_36" # "hpc"
+weights_name = "aurora_300000_steps"
 
 
 dt = 0.2
-revolt = AuroraFerry(dt)
 env = TrajTrackingEnv(
-    own_vessel=revolt,
-    render_mode="human"
+    dt,
+    render_mode="human",
+    n_wpts=3,
 )
 
-env.max_steps = 100
+# env.max_steps = 100
 
 env = gym.wrappers.FlattenObservation(env)
 

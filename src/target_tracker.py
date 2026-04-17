@@ -24,14 +24,17 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
     def __init__(
             self,
             Q, # Process covariance
-            R, # Measurement Covariance
+            R_ais, # AIS Measurement Covariance
+            R_camera, # Camera Measurement Covariance
             x0, # Initial states
             P0, # Initial error covariance
             dt, # Sampling time, needed when building the system's model.
             *args,
             **kwargs
         ):
-        super().__init__(Q, R, x0, P0, dt, *args, **kwargs)
+        super().__init__(Q, R_ais + R_camera, x0, P0, dt, *args, **kwargs)
+        self.R_ais = R_ais
+        self.R_camera = R_camera
 
     def f(self, x:np.ndarray, u:np.ndarray, *args, **kwargs) -> np.ndarray:
         """
@@ -93,7 +96,7 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
         Returns updated state estimate based on measurement z from ais
         """
         dHdx_ais = self.dhdx_ais(self.x)
-        S = dHdx_ais @ self.P @ dHdx_ais.T + self.R # Residual covariance -> Expected combined uncertainty of prediction & measurement
+        S = dHdx_ais @ self.P @ dHdx_ais.T + self.R_ais # Residual covariance -> Expected combined uncertainty of prediction & measurement
         K = self.P @ dHdx_ais.T @ np.linalg.inv(S) # Kalman Gain -> balance factor for blending prediction and measurements
         y = z - self.h_ais(self.x) # Residuals between measurement and measurement model
         self.x = self.x + K @ y # Update state estimate through innovation
@@ -106,7 +109,7 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
         Returns updated state estimate based on measurement z from camera
         """
         dHdx_camera = self.dhdx_camera(self.x)
-        S = dHdx_camera @ self.P @ dHdx_camera.T + self.R # Residual covariance -> Expected combined uncertainty of prediction & measurement
+        S = dHdx_camera @ self.P @ dHdx_camera.T + self.R_camera # Residual covariance -> Expected combined uncertainty of prediction & measurement
         K = self.P @ dHdx_camera.T @ np.linalg.inv(S) # Kalman Gain -> balance factor for blending prediction and measurements
         y = z - self.h_ais(self.x) # Residuals between measurement and measurement model
         self.x = self.x + K @ y # Update state estimate through innovation

@@ -37,10 +37,10 @@
     },
     "speed_error_range": {
         "min": [
-            -22.995646800000003
+            -22.5
         ],
         "max": [
-            22.995646800000003
+            22.5
         ]
     },
     "azimuth_angles_range": {
@@ -76,19 +76,23 @@
         "max": 20
     },
     "wind_angle_range": {
-        "min": -3.141592653589793,
-        "max": 3.141592653589793
+        "min": -3.14159,
+        "max": 3.14159
     },
     "current_speed_range": {
         "min": 0,
         "max": 2
     },
     "current_angle_range": {
-        "min": -3.141592653589793,
-        "max": 3.141592653589793
+        "min": -3.14159,
+        "max": 3.14159
+    },
+    "total_mass_range": {
+        "min": 2250000,
+        "max": 2726250
     },
     "action_repeat": 10,
     "dt": 0.2,
-    "wpts_space_multiplicator": 20,
+    "wpts_space_multiplicator": 10,
     "n_wpts": 3
 }

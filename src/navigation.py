@@ -11,6 +11,7 @@ from src.camera import Camera
 from src.ais import Vessel, AIS
 from src.target_tracker import TargetTrackerSequentialEKF
 from src.state_estimator import StateEstimatorEKF
+from src.odm import ODM
 
 from matplotlib.axes import Axes
 from datetime import datetime
@@ -70,7 +71,8 @@ class NavigationAurora(INavigation):
             dt: float,
             *args,
             Q_tt: Optional[np.ndarray] = np.eye(4) * 1e-6,  # process noise     (target tracker)
-            R_tt: Optional[np.ndarray] = np.eye(4),         # measurement noise (target tracker)
+            R_ais: Optional[np.ndarray] = np.eye(4),        # measurement noise (AIS)
+            R_camera: Optional[np.ndarray] = np.eye(2),     # measurement noise (camera)
             P0_tt: np.ndarray = np.eye(4),                  # state covariance  (target tracker)
             Q_se: Optional[np.ndarray] = Q_AURORA,          # process noise     (state estimator)
             R_se: Optional[np.ndarray] = R_AURORA,          # measurement noise (state estimator)
@@ -78,13 +80,16 @@ class NavigationAurora(INavigation):
             sensors: Optional[Dict[str, ISensor]] = None,
             max_age_seconds: Optional[float] = None,
             seed: Optional[int] = None,
+            odm: Optional[ODM] = None,
             **kwargs
     ):
         sensors = sensors if sensors is not None else {} # {'camera': Camera(), 'ais': AIS()}
-            
+        self.odm = odm or ODM()
+
         self.target_tracker_params = {
             'Q': Q_tt,
-            'R': R_tt,
+            'R_ais': R_ais, # self.odm.sensors["ais"]["noise-covariance"]
+            'R_camera': R_camera, # self.odm.sensors["camera"]["noise-covariance"]
             'P0': P0_tt,
             'dt': dt
         }
@@ -125,7 +130,6 @@ class NavigationAurora(INavigation):
         ais = self.sensors['ais'](timestamp=timestamp, max_age_seconds=self.max_age_seconds)
         # camera = self.sensors['camera'](timestamp=timestamp, max_age_seconds=self.max_age_seconds)
 
-        
         vessels_ais: List[Vessel] = ais[0] # Done in this way to specify type explicitely
         info_ais: Dict = ais[1]
 

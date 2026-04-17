@@ -39,7 +39,7 @@
             "max": 3.14159,
             "ornstein-uhlenbeck": {
                 "attraction": 0.01,
-                "amplitude": 0.01
+                "amplitude": 0.05
             }
         },
         "speed": {
@@ -47,7 +47,7 @@
             "max": 20,
             "ornstein-uhlenbeck": {
                 "attraction": 0.01,
-                "amplitude": 0.01
+                "amplitude": 0.1
             }
         }
     },
@@ -57,7 +57,7 @@
             "max": 3.14159,
             "ornstein-uhlenbeck": {
                 "attraction": 0.01,
-                "amplitude": 0.01
+                "amplitude": 0.05
             }
         },
         "speed": {
@@ -65,7 +65,7 @@
             "max": 2,
             "ornstein-uhlenbeck": {
                 "attraction": 0.01,
-                "amplitude": 0.01
+                "amplitude": 0.1
             }
         }
     },

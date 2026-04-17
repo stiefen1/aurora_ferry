@@ -17,9 +17,8 @@ name_prefix = "aurora"
 
 
 dt = 0.2
-revolt = AuroraFerry(dt)
 env = TrajTrackingEnv(
-    own_vessel=revolt
+    dt
 )
 
 env = gym.wrappers.FlattenObservation(env) # Needed for Dict observation space
@@ -41,7 +40,7 @@ model = PPO( # Or SAC
     tensorboard_log=tensorboard_path
 )
 model.learn(
-    total_timesteps=1_000_000,
+    total_timesteps=3_000_000,
     tb_log_name=name_prefix,
     callback=checkpoint_callback
 )
