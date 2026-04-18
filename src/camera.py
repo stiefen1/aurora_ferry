@@ -43,37 +43,29 @@ class Camera(ISensor):
         info = {'status': success}
         return [], info
     
-
-def get_camera_covariance(distance: float | npt.NDArray, weather: Weather) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
+def get_camera_covariance(distance: float | npt.NDArray, visibility: float, illumination: float) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
     """
     Return covariance of relative bearing angle (rad^2) and distance (m^2) depending on distance and weather.
 
     Target size is not taken into account for now. 
     """
-    slope_cov_gamma = 1e-4
-    slope_cov_dist = 1e-2
-    match weather:
-        case Weather.SUNNY:
-            cov_gamma_0 = 1e-2
-            cov_dist_0 = 5
-        case Weather.CLOUDY:
-            cov_gamma_0 = 3e-2
-            cov_dist_0 = 10
-        case Weather.FOGGY:
-            cov_gamma_0 = 5e-2
-            cov_dist_0 = 15
-        case _:
-            raise ValueError(f"Invalid weather {weather}")
-    return (slope_cov_gamma * distance + cov_gamma_0, slope_cov_dist * distance + cov_dist_0)
+    sqrt_vis_ill = np.sqrt(visibility * illumination)
+    a_gamma = np.deg2rad(2e-7) + np.deg2rad(3e-7) * (1 - sqrt_vis_ill)
+    a_dist = 1.5e-4 + 2e-4 * (1 - sqrt_vis_ill)
+
+    c_gamma = np.deg2rad(0.1) + np.deg2rad(0.4) * (1 - sqrt_vis_ill)
+    c_dist = 50 + 400 * (1 - sqrt_vis_ill)
+
+    return (a_gamma * distance**2 + c_gamma, a_dist * distance**2 + c_dist)
 
 if __name__ == "__main__":
     import numpy as np, matplotlib.pyplot as plt
     distance = np.linspace(0, 3000, 300)
 
     fig, axs = plt.subplots(1, 2)
-    for w in [Weather.SUNNY, Weather.CLOUDY, Weather.FOGGY]:
-        axs[0].plot(distance, np.rad2deg(get_camera_covariance(distance, w)[0]), label=f'{w}')
-        axs[1].plot(distance, get_camera_covariance(distance, w)[1], label=f'{w}')
+    for w in [(1, 1), (0.7, 0.7), (0.4, 0.4)]:
+        axs[0].plot(distance, np.rad2deg(get_camera_covariance(distance, *w)[0]), label=f'{w}')
+        axs[1].plot(distance, get_camera_covariance(distance, *w)[1], label=f'{w}')
 
     axs[0].set_title(f"bearing covariance")
     axs[1].set_title(f"distance covariance")

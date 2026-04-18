@@ -53,10 +53,6 @@ class TrajTrackingEnv(gym.Env):
             wpts_space_multiplicator: int = 10,
             initial_angle_range: Tuple[float, float] = (-180, 180),
             odm: Optional[ODM] = None,
-            # wind_speed_range: Tuple = (0, 20), # calm -> fresh gale
-            # wind_angle_range: Tuple = (-np.pi, np.pi),
-            # current_speed_range: Tuple = (0, 2), # m/s -> can reach 4 kts = 2 m/s around Helsingborg 
-            # current_angle_range: Tuple = (-np.pi, np.pi)
     ):
         """
         Gymnasium navigation environment for vessel control.
@@ -138,7 +134,7 @@ class TrajTrackingEnv(gym.Env):
         ) - self.odm.ferry["cars"]["mass"]["mean"]
         self.own_vessel = AuroraFerry(self.dt, mass=self.odm.ferry["mass"], n_passengers=n_passengers, n_cars=n_cars, passenger_dmass=passenger_dmass, car_dmass=car_dmass)
 
-        print(f"{self.own_vessel.vessel_params.m_tot_estimated:.1f} in [{self.total_mass_range["min"]:.1f}; {self.total_mass_range["max"]:.1f}] ?")
+        # print(f"{self.own_vessel.vessel_params.m_tot_estimated:.1f} in [{self.total_mass_range["min"]:.1f}; {self.total_mass_range["max"]:.1f}] ?")
 
         x_init_min = np.array([-300, -300, 0, 0, 0, -np.pi, 
                                -self.V_range[1], -self.V_range[1]/10, 0, 0, 0, -0.1,
@@ -330,8 +326,16 @@ class TrajTrackingEnv(gym.Env):
         try:
             targets = self.path.get_target_wpts_from(ne[0], ne[1], self.action_repeat*self.dt*self.V_des*self.wpts_space_multiplicator, self.n_wpts)
         except:
-            targets = self.path.get_target_wpts_from(ne[0]+1, ne[1]+1, self.action_repeat*self.dt*self.V_des*self.wpts_space_multiplicator, self.n_wpts)
             print(f"An error occured at n,e = {ne} with path = {self.path.waypoints}") # type: ignore
+            print(
+                "x: ", self.own_vessel.navigation.state_estimator.x,
+                "Q: ", self.own_vessel.navigation.state_estimator.Q,
+                "R: ", self.own_vessel.navigation.state_estimator.R,
+                # "S: ", self.own_vessel.navigation.state_estimator.S,
+                "P: ", self.own_vessel.navigation.state_estimator.P
+            )
+            targets = self.path.get_target_wpts_from(ne[0]+1, ne[1]+1, self.action_repeat*self.dt*self.V_des*self.wpts_space_multiplicator, self.n_wpts)
+            
 
         for target in targets: # type: ignore
             delta = target[0:2] - ne

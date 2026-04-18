@@ -18,7 +18,9 @@ name_prefix = "aurora"
 
 dt = 0.2
 env = TrajTrackingEnv(
-    dt
+    dt,
+    n_wpts=2,
+    wpts_space_multiplicator=30
 )
 
 env = gym.wrappers.FlattenObservation(env) # Needed for Dict observation space

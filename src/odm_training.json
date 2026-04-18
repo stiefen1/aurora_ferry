@@ -123,7 +123,8 @@
                     5,
                     0.5,
                     0.015
-                ]
+                ],
+                "info": "measure states are N, E, SOG [kn], COG [rad]"
             }
         },
         "camera": {
