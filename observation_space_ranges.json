@@ -14,23 +14,19 @@
     "rel_target_range": {
         "min": [
             0,
-            0,
             0
         ],
         "max": [
-            5000,
-            5000,
-            5000
+            10000,
+            10000
         ]
     },
     "rel_yaw_range": {
         "min": [
             -3.141592653589793,
-            -3.141592653589793,
             -3.141592653589793
         ],
         "max": [
-            3.141592653589793,
             3.141592653589793,
             3.141592653589793
         ]
@@ -71,21 +67,37 @@
             168.81943016134133
         ]
     },
-    "wind_speed_range": {
-        "min": 0,
-        "max": 20
+    "rel_wind_speed_range": {
+        "min": [
+            0.0
+        ],
+        "max": [
+            27.5
+        ]
     },
-    "wind_angle_range": {
-        "min": -3.14159,
-        "max": 3.14159
+    "rel_wind_angle_range": {
+        "min": [
+            -3.141592653589793
+        ],
+        "max": [
+            3.141592653589793
+        ]
     },
-    "current_speed_range": {
-        "min": 0,
-        "max": 2
+    "rel_current_speed_range": {
+        "min": [
+            0.0
+        ],
+        "max": [
+            9.5
+        ]
     },
-    "current_angle_range": {
-        "min": -3.14159,
-        "max": 3.14159
+    "rel_current_angle_range": {
+        "min": [
+            -3.141592653589793
+        ],
+        "max": [
+            3.141592653589793
+        ]
     },
     "total_mass_range": {
         "min": 2250000,
@@ -93,6 +105,6 @@
     },
     "action_repeat": 10,
     "dt": 0.2,
-    "wpts_space_multiplicator": 10,
-    "n_wpts": 3
+    "wpts_space_multiplicator": 25,
+    "n_wpts": 2
 }

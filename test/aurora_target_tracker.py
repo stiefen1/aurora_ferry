@@ -7,12 +7,12 @@ from python_vehicle_simulator.lib.actuator import AzimuthThruster
 from python_vehicle_simulator.lib.path import PWLPath
 from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec
 import numpy as np, matplotlib.pyplot as plt
-from src.aurora import SingleAzimuthThrusterParameters, AuroraFerry
-from src.navigation import NavigationAurora
-from src.guidance import TimespaceGuidance
-from src.ais import AIS
+from src.ferry.aurora import SingleAzimuthThrusterParameters, AuroraFerry
+from src.ferry.navigation import NavigationAurora
+from src.ferry.guidance import TimespaceGuidance
+from src.environment.ais_old import AIS
 from datetime import datetime, timedelta
-from src.map import HelsingborgMap
+from src.environment.map import HelsingborgMap
 from colav.planner import TimeSpaceColav
 from colav.obstacles.moving import MovingShip
 import colav, logging

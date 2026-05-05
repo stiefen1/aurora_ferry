@@ -1,5 +1,6 @@
-from src.aurora import AuroraFerry, AuroraFerryActuatorsParameters, AuroraFerryParameters
-from src.diff_mpc_tracking import DiffMPCTrajectoryTracking
+from python_vehicle_simulator.states import states
+
+from src.ferry.aurora import AuroraFerry, AuroraFerryActuatorsParameters, AuroraFerryParameters
 from python_vehicle_simulator.lib.simulator import Simulator
 from python_vehicle_simulator.lib.env import NavEnv
 from python_vehicle_simulator.lib.weather import Current
@@ -9,13 +10,11 @@ from python_vehicle_simulator.lib.actuator import AzimuthThruster
 from python_vehicle_simulator.lib.path import PWLPath
 from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec
 import numpy as np, matplotlib.pyplot as plt
-from src.aurora import SingleAzimuthThrusterParameters, AuroraFerry
-from src.navigation import NavigationAurora
-from src.ais import AIS
+from src.ferry.aurora import SingleAzimuthThrusterParameters, AuroraFerry
+from src.ferry.navigation import NavigationAurora
 from datetime import datetime, timedelta
-from src.map import HelsingborgMap
+from src.environment.map import HelsingborgMap
 import logging
-from src.discrete_dynamics import get_discrete_3dof_dynamics_as_fn
 from csnlp import wrappers
 
 
@@ -31,18 +30,11 @@ T_sim = 500.0  # 80 seconds simulation (increased to see more of the trajectory)
 H = 10  # MPC horizon
 
 ferry = AuroraFerry(
-        eta0=eta0,
-        nu0=nu0,
+        eta=eta0,
+        nu=nu0,
         dt=dt,
-        actuators=[
-            AzimuthThruster(xy=(-35, -9.4), length=20, width=10, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(-35, 9.4), length=20, width=10, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(35, 9.4), length=20, width=10, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(35, -9.4), length=20, width=10, **vars(SingleAzimuthThrusterParameters()))
-        ],
         navigation=NavigationAurora(
-            eta=np.array(eta0),
-            nu=np.array(nu0),
+            states=np.array([*eta0, *nu0]),
             dt=dt,
             max_age_seconds=dt
         )

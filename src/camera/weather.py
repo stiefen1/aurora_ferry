@@ -1,7 +1,7 @@
 from enum import Enum
 import numpy as np, numpy.typing as npt
 from python_vehicle_simulator.utils.math_fn import ssa
-from typing import Tuple
+from typing import Tuple, Dict
 
 class Weather(Enum):
     SUNNY = 0
@@ -37,8 +37,6 @@ def get_detection_probability_interactive(
     return 1 / (1 + np.exp(-(fov-offset)/scale))
 
 
-
-
 def get_detection_probability(
         os_ne: npt.NDArray,
         ts_neyaw: npt.NDArray,
@@ -46,7 +44,7 @@ def get_detection_probability(
         beam: float,
         visibility: float,
         illumination: float,
-    ) -> float | npt.NDArray:
+    ) -> Tuple[float | npt.NDArray, Dict]:
     """
     Compute the probability of detection using a camera.
 
@@ -61,13 +59,12 @@ def get_detection_probability(
     os_ne = np.reshape(os_ne, (-1, 2))
     ts_neyaw = np.reshape(ts_neyaw, (-1, 3))
     yaw_ts = ssa(ts_neyaw[:, 2])
-    yaw_ts = ssa(yaw_ts)
     xy_os, xy_ts = np.array([os_ne[:, 1], os_ne[:, 0]]).T, np.array([ts_neyaw[:, 1], ts_neyaw[:, 0]]).T
     xy_rel = xy_ts - xy_os
     rel_angle = ssa(np.atan2(xy_rel[:, 0], xy_rel[:, 1]))
-    delta_angle_abs = ssa(yaw_ts - rel_angle)
+    delta_angle_abs = abs(ssa(yaw_ts - rel_angle))
 
-    corrected_size =  0.5 * (beam + loa) - 0.5 * np.cos(2*delta_angle_abs) * (loa - beam) # loa when 0, beam when pi
+    corrected_size =  0.5 * (beam + loa) - 0.5 * np.cos(2*delta_angle_abs) * (loa - beam) # beam when 0 and loa when pi/2
     half_fov_rad = np.atan(corrected_size / 2 / np.linalg.norm(xy_rel, axis=1))
     fov = 2*np.rad2deg(half_fov_rad)
     sqrt_vis_ill = np.sqrt(visibility * illumination)
@@ -79,9 +76,7 @@ def get_detection_probability(
     # p -> 0 when sqrt_vis_ill -> 0
     # return 2/(1+np.exp(-(sqrt_vis_ill**2-1)/1)) * 1 / (1 + 1 * np.exp(-(fov-offset)/scale) )
     # return np.clip((fov)**2, 0, 1)
-    return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) )
-
-
+    return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {"corrected_size": corrected_size, "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
 
 def is_target_detected(
         os_ne: npt.NDArray,
@@ -90,10 +85,10 @@ def is_target_detected(
         beam: float,
         visibility: float,
         illumination: float
-    ):
-    p = get_detection_probability(os_ne, ts_neyaw, beam, loa, visibility, illumination)
+    ) -> Tuple[bool, Dict]:
+    p, info = get_detection_probability(os_ne, ts_neyaw, loa, beam, visibility, illumination)
     val = np.random.uniform(low=0, high=1)
-    return bool(val <= p)
+    return bool(val <= p), info
         
 if __name__ == "__main__":
     import matplotlib.pyplot as plt, numpy as np
@@ -117,7 +112,7 @@ if __name__ == "__main__":
 
     for v,i in weathers:
         for s in size:
-            p = get_detection_probability(np.repeat(os_neyaw[None, 0:2], d.shape[0], axis=0), ts_neyaw, s[0], s[1], v, i)
+            p, _ = get_detection_probability(np.repeat(os_neyaw[None, 0:2], d.shape[0], axis=0), ts_neyaw, s[0], s[1], v, i)
             ax.plot(d, p, c=color_map[v, i], linestyle=linestyle_map[s], label=f"{s} - {v}_{i}")
             # print(f"Detected (v={v}, i={i} - s={s}): ", is_target_detected(1000, s/np.sqrt(2), s/np.sqrt(2), v, i))
     ax.vlines(xline, -2, 2, 'black', linestyles=':')

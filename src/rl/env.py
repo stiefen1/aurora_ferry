@@ -7,7 +7,7 @@ from python_vehicle_simulator.utils.math_fn import ssa
 from python_vehicle_simulator.utils.math_fn import Rzyx
 from python_vehicle_simulator.lib.thruster import ROTATION_MATRIX
 
-from src.aurora import AuroraFerry
+from src.ferry.aurora import AuroraFerry
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
@@ -366,7 +366,7 @@ def check_environment() -> None:
     from gymnasium.utils.env_checker import check_env
     from python_vehicle_simulator.lib.weather import Wind, Current
     from python_vehicle_simulator.utils.unit_conversion import DEG2RAD
-    from src.aurora import AuroraFerry
+    from src.ferry.aurora import AuroraFerry
 
     dt = 0.1
 

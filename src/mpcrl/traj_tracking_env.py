@@ -32,13 +32,11 @@ IMPORTANT NOTES:
 
 """
 
-DEFAULT_CENTER_NE = (0, 0) # (6.212e6, 351900.0)
-
 DEFAULT_PATH_PARAMS = {
-    "d_tot": 10000, "max_turn_deg": 45, "seg_len_range":(500, 1000), "start":DEFAULT_CENTER_NE, "N":1
+    "d_tot": 10000, "max_turn_deg": 45, "seg_len_range":(500, 1000), "start":(0.0, 0.0), "N":1
 }
 
-class TrajTrackingEnv(gym.Env):
+class MPCRLTrajTrackingEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 30}
     actuators_params = AuroraFerryActuatorsParameters()
 
@@ -55,7 +53,7 @@ class TrajTrackingEnv(gym.Env):
             initial_angle_range: Tuple[float, float] = (-180, 180),
             odm: Optional[ODM] = None,
             action_repeat: int = 10,
-            path_to_obs_ranges: Optional[str] = None,
+            mpc_horizon: int = 10,
     ):
         """
         Gymnasium navigation environment for vessel control.
@@ -85,7 +83,7 @@ class TrajTrackingEnv(gym.Env):
         self.V_range = tuple(self.odm.ferry["target-speed"].values())
 
         self.init_action_space()
-        self.init_observation_space(path_to_ranges=path_to_obs_ranges)
+        self.init_observation_space()
 
         self.safety_radius = 2.5
         self.action_repeat = action_repeat # if dt is 0.02, this leads the RL frequency to 1/(10*0.02) = 1/0.2 = 5Hz
@@ -132,13 +130,12 @@ class TrajTrackingEnv(gym.Env):
         self.own_vessel = AuroraFerry(self.dt, mass=self.odm.ferry["mass"], n_passengers=n_passengers, n_cars=n_cars, passenger_dmass=passenger_dmass, car_dmass=car_dmass)
 
         # print(f"{self.own_vessel.vessel_params.m_tot_estimated:.1f} in [{self.total_mass_range["min"]:.1f}; {self.total_mass_range["max"]:.1f}] ?")
-        # 351900.0, 6.212e6
-        # self.map_bounds
-        x_init_min = np.array([-300+DEFAULT_CENTER_NE[0], -300+DEFAULT_CENTER_NE[1], 0, 0, 0, -np.pi, 
+
+        x_init_min = np.array([-300, -300, 0, 0, 0, -np.pi, 
                                -self.V_range[1], -self.V_range[1]/10, 0, 0, 0, -0.1,
                                *self.azimuth_angles_range["min"],
                                *self.thruster_speeds_range["min"]])
-        x_init_max = np.array([300+DEFAULT_CENTER_NE[0], 300+DEFAULT_CENTER_NE[1], 0, 0, 0, np.pi, 
+        x_init_max = np.array([300, 300, 0, 0, 0, np.pi, 
                                self.V_range[1], self.V_range[1]/10, 0, 0, 0, 0.1,
                                *self.azimuth_angles_range["max"],
                                *self.thruster_speeds_range["max"]])
@@ -387,7 +384,7 @@ class TrajTrackingEnv(gym.Env):
             "total_mass": total_mass_norm
         }
 
-    def init_observation_space(self, path_to_ranges: Optional[str] = None) -> None:
+    def init_observation_space(self) -> None:
         """
         Initialize observation space with normalized ranges.
         
@@ -411,64 +408,23 @@ class TrajTrackingEnv(gym.Env):
             }
         )
 
-        if path_to_ranges is not None:
-            self.load_ranges_from_json(path_to_ranges)
-        else:
-            # Used to map normalized observations to actual values (see method get_obs)
-            self.uvr_range = {"min": np.array([-10, -10, -10]), "max": np.array([10, 10, 10])}
-            self.rel_target_range = {"min":np.array(self.n_wpts*[0]), "max": np.array(self.n_wpts*[self.path_params['d_tot']])} # relative distance to a point of the horizon
-            self.rel_yaw_range = {"min": np.array(self.n_wpts*[-np.pi]), "max": np.array(self.n_wpts*[np.pi])} # relative bearing angle to a point of the horizon
-            self.speed_error_range = {"min": np.array([-3*self.V_range[1]]), "max": np.array([3*self.V_range[1]])}
-            self.azimuth_angles_range = {"min": self.actuators_params.alpha_min, "max": self.actuators_params.alpha_max}
-            self.thruster_speeds_range = {"min": self.actuators_params.speed_min, "max": self.actuators_params.speed_max}
-            self.rel_wind_speed_range = {"min": np.array([0.0]), "max": np.array([self.wind_speed_range["max"] + self.V_range[1]])}
-            self.rel_wind_angle_range = {"min": np.array([-np.pi]), "max": np.array([np.pi])}
-            self.rel_current_angle_range = {"min": np.array([-np.pi]), "max": np.array([np.pi])}
-            self.rel_current_speed_range = {"min": np.array([0.0]), "max": np.array([self.current_speed_range["max"] + self.V_range[1]])}
-            self.total_mass_range = {
-                "min": np.array(self.odm.ferry["mass"]),
-                "max": np.array(self.odm.ferry["mass"] + \
-                        self.odm.ferry["passengers"]["number"]["max"] * self.odm.ferry["passengers"]["mass"]["max"] + \
-                        self.odm.ferry["cars"]["number"]["max"] * self.odm.ferry["cars"]["mass"]["max"])
-            }
-
-    def load_ranges_from_json(self, path: str) -> None:
-        with open(path, 'r') as f:
-            ranges_config = json.load(f)
-        
-        # Convert lists to numpy arrays
-        self.uvr_range = {"min": np.array(ranges_config["uvr_range"]["min"]), 
-                          "max": np.array(ranges_config["uvr_range"]["max"])}
-        self.rel_target_range = {"min": np.array(ranges_config["rel_target_range"]["min"]), 
-                                 "max": np.array(ranges_config["rel_target_range"]["max"])}
-        self.rel_yaw_range = {"min": np.array(ranges_config["rel_yaw_range"]["min"]), 
-                              "max": np.array(ranges_config["rel_yaw_range"]["max"])}
-        self.speed_error_range = {"min": np.array(ranges_config["speed_error_range"]["min"]), 
-                                  "max": np.array(ranges_config["speed_error_range"]["max"])}
-        self.azimuth_angles_range = {"min": np.array(ranges_config["azimuth_angles_range"]["min"]), 
-                                     "max": np.array(ranges_config["azimuth_angles_range"]["max"])}
-        self.thruster_speeds_range = {"min": np.array(ranges_config["thruster_speeds_range"]["min"]), 
-                                      "max": np.array(ranges_config["thruster_speeds_range"]["max"])}
-        self.rel_wind_speed_range = {"min": np.array(ranges_config["rel_wind_speed_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_wind_speed_range"]["max"])}
-        self.rel_wind_angle_range = {"min": np.array(ranges_config["rel_wind_angle_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_wind_angle_range"]["max"])}
-        self.rel_current_speed_range = {"min": np.array(ranges_config["rel_current_speed_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_speed_range"]["max"])}
-        self.rel_current_angle_range = {"min": np.array(ranges_config["rel_current_angle_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_angle_range"]["max"])}
-        self.total_mass_range = {"min": np.array(ranges_config["total_mass_range"]["min"]), 
-                                      "max": np.array(ranges_config["total_mass_range"]["max"])}
-        
-        # Load environment parameters
-        self.action_repeat = ranges_config["action_repeat"]
-        self.dt = ranges_config["dt"]
-        self.wpts_space_multiplicator = ranges_config["wpts_space_multiplicator"]
-        self.n_wpts = ranges_config["n_wpts"]
-        print(f"Loaded observation space ranges from {path}")
-
-
-
+        # Used to map normalized observations to actual values (see method get_obs)
+        self.uvr_range = {"min": np.array([-10, -10, -10]), "max": np.array([10, 10, 10])}
+        self.rel_target_range = {"min":np.array(self.n_wpts*[0]), "max": np.array(self.n_wpts*[self.path_params['d_tot']])} # relative distance to a point of the horizon
+        self.rel_yaw_range = {"min": np.array(self.n_wpts*[-np.pi]), "max": np.array(self.n_wpts*[np.pi])} # relative bearing angle to a point of the horizon
+        self.speed_error_range = {"min": np.array([-3*self.V_range[1]]), "max": np.array([3*self.V_range[1]])}
+        self.azimuth_angles_range = {"min": self.actuators_params.alpha_min, "max": self.actuators_params.alpha_max}
+        self.thruster_speeds_range = {"min": self.actuators_params.speed_min, "max": self.actuators_params.speed_max}
+        self.rel_wind_speed_range = {"min": np.array([0.0]), "max": np.array([self.wind_speed_range["max"] + self.V_range[1]])}
+        self.rel_wind_angle_range = {"min": np.array([-np.pi]), "max": np.array([np.pi])}
+        self.rel_current_angle_range = {"min": np.array([-np.pi]), "max": np.array([np.pi])}
+        self.rel_current_speed_range = {"min": np.array([0.0]), "max": np.array([self.current_speed_range["max"] + self.V_range[1]])}
+        self.total_mass_range = {
+            "min": np.array(self.odm.ferry["mass"]),
+            "max": np.array(self.odm.ferry["mass"] + \
+                    self.odm.ferry["passengers"]["number"]["max"] * self.odm.ferry["passengers"]["mass"]["max"] + \
+                    self.odm.ferry["cars"]["number"]["max"] * self.odm.ferry["cars"]["mass"]["max"])
+        }
     
     def export_observation_space_ranges_to(self, path: str) -> None:
         """
@@ -592,8 +548,8 @@ class TrajTrackingEnv(gym.Env):
             self.vessel_plot, = self.ax.plot([], [], label='Vessel')
             self.actuators_plot: List[Line2D] = [self.ax.plot([], [], label=f'Th{i}')[0] for i in range(4)]
             self.waypoints_plot = self.ax.scatter([], [], label='waypoints')
-            self.ax.set_xlim(-self.map_bounds + DEFAULT_CENTER_NE[1], self.map_bounds + DEFAULT_CENTER_NE[1]) # 351900.0, 6.212e6
-            self.ax.set_ylim(-self.map_bounds + DEFAULT_CENTER_NE[0], self.map_bounds + DEFAULT_CENTER_NE[0])
+            self.ax.set_xlim(-self.map_bounds, self.map_bounds)
+            self.ax.set_ylim(-self.map_bounds, self.map_bounds)
             self.ax.plot(self.path.waypoints[:, 1], self.path.waypoints[:, 0], c='red') # type: ignore
             self.ax.set_xlabel('East')
             self.ax.set_ylabel('North')

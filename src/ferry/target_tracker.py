@@ -32,9 +32,9 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
             *args,
             **kwargs
         ):
-        super().__init__(Q, R_ais + R_camera, x0, P0, dt, *args, **kwargs)
+        super().__init__(Q, R_ais, x0, P0, dt, *args, **kwargs)
         self.R_ais = R_ais
-        self.R_camera = R_camera
+        self.R_camera = R_camera 
 
     def f(self, x:np.ndarray, u:np.ndarray, *args, **kwargs) -> np.ndarray:
         """
@@ -86,10 +86,11 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
         """
         Jacobian of the measurement's model (camera): dh/dx for z = h(x)
         """
-        return np.block([
-            [np.eye(2), np.zeros((2, 2))],
-            [np.zeros((2, 4))],
-            ])
+        return np.eye(4)
+        # return np.block([
+        #     [np.eye(2), np.zeros((2, 2))],
+        #     [np.zeros((2, 4))],
+        #     ])
     
     def update_ais(self, z:np.ndarray) -> np.ndarray:
         """
@@ -111,7 +112,7 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
         dHdx_camera = self.dhdx_camera(self.x)
         S = dHdx_camera @ self.P @ dHdx_camera.T + self.R_camera # Residual covariance -> Expected combined uncertainty of prediction & measurement
         K = self.P @ dHdx_camera.T @ np.linalg.inv(S) # Kalman Gain -> balance factor for blending prediction and measurements
-        y = z - self.h_ais(self.x) # Residuals between measurement and measurement model
+        y = z - self.h_camera(self.x) # Residuals between measurement and measurement model
         self.x = self.x + K @ y # Update state estimate through innovation
         I = np.eye(self.P.shape[0])
         self.P = (I - K @ dHdx_camera) @ self.P

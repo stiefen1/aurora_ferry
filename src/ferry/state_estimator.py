@@ -1,5 +1,5 @@
 from python_vehicle_simulator.lib.kalman import IExtendedKalmanFilter
-from src.aurora import Aurora3Dynamics
+from src.ferry.aurora import Aurora3Dynamics
 import numpy as np
 
 class StateEstimatorEKF(IExtendedKalmanFilter):
@@ -61,7 +61,7 @@ class StateEstimatorEKF(IExtendedKalmanFilter):
         """
         Jacobian of system's model: df/dx for x = x_prev, u = u_prev
         """
-        return self.aurora_dynamics.Ad(x, u, np.ones((1,)), np.zeros((3,)))
+        return self.aurora_dynamics.Ad(x, u, np.ones((8,)), np.zeros((3,)))
     
     def h(self, x:np.ndarray, *args, **kwargs) -> np.ndarray:
         return np.array([x[0], x[1], x[5], x[6], x[7], x[11], *x[12:16]])

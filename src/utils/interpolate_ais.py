@@ -39,7 +39,7 @@ def load_ais_csv(filename):
     return pd.read_csv(filename)
 
 
-def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None) -> pd.DataFrame:
+def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None, remove_stationary=True, min_speed=0.5) -> pd.DataFrame:
     """
     Interpolate AIS data to regular time intervals with optional smoothing.
     
@@ -49,6 +49,8 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None) 
     - smooth: apply Gaussian smoothing to interpolated data
     - sigma: standard deviation for Gaussian smoothing (higher = smoother)
     - exclude_ship: MMSI number or ship name to exclude from interpolation
+    - remove_stationary: remove vessels that are not moving (in port)
+    - min_speed: minimum speed in knots to consider vessel as moving
     
     Returns:
     - DataFrame with interpolated and optionally smoothed data at regular intervals
@@ -66,6 +68,24 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None) 
         if 'name' in df.columns:
             name_mask = df['name'] != exclude_ship
         df = df[mmsi_mask & name_mask]
+    
+    # Remove stationary vessels (assumed to be in port)
+    if remove_stationary:
+        initial_vessels = len(df['mmsi'].unique())
+        
+        # Filter by navigation status - remove moored/anchored vessels
+        if 'nav_status' in df.columns:
+            stationary_statuses = ['Moored', 'At anchor', 'Aground']
+            status_mask = ~df['nav_status'].str.contains('|'.join(stationary_statuses), na=False, case=False)
+            df = df[status_mask]
+        
+        # Filter by speed over ground - remove very slow vessels
+        if 'sog' in df.columns:
+            df['sog'] = pd.to_numeric(df['sog'], errors='coerce')
+            df = df[(df['sog'].isna()) | (df['sog'] >= min_speed)]
+        
+        remaining_vessels = len(df['mmsi'].unique())
+        print(f"Filtered out {initial_vessels - remaining_vessels} stationary vessels, keeping {remaining_vessels} moving vessels")
     
     # Group by MMSI (vessel ID) and interpolate each vessel separately
     interpolated_data = []
@@ -86,6 +106,10 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None) 
         vessel_interp = pd.DataFrame({'timestamp_sec': new_times})
         vessel_interp['mmsi'] = mmsi
         
+        # Convert timestamp_sec to datetime format to match original AIS format
+        vessel_interp['timestamp'] = pd.to_datetime(vessel_interp['timestamp_sec'], unit='s')
+        vessel_interp['timestamp'] = vessel_interp['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
         # Copy non-numeric fields from first record
         for col in ['name', 'ship_type', 'length', 'width']:
             if col in vessel_data.columns:
@@ -98,7 +122,7 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None) 
                 interpolated_values = np.interp(
                     new_times, 
                     vessel_data['timestamp_sec'], 
-                    vessel_data[col].fillna(method='ffill')
+                    vessel_data[col].ffill()
                 )
                 
                 # Apply smoothing if requested
@@ -201,8 +225,9 @@ if __name__ == "__main__":
 
     for f in files:
         df = load_ais_csv(f)
-        df_smooth_interp = interpolate_ais_data(df, dt=1.0, smooth=True, sigma=10.0, exclude_ship=265041000)
+        df_smooth_interp = interpolate_ais_data(df, dt=1.0, smooth=True, sigma=10.0, exclude_ship=265041000, remove_stationary=True)
         df_smooth_interp.to_csv(os.path.join('data', 'smooth_interp', os.path.basename(f)))
+        print(f"Processed {os.path.basename(f)}")
 
     # test_filename = os.path.join('data', 'AIS2.csv')
     

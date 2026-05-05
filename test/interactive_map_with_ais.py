@@ -15,8 +15,8 @@ from matplotlib.widgets import Slider
 from matplotlib.patches import Polygon
 from matplotlib.text import Text
 from typing import List
-from src.map import HelsingborgMap
-from src.ais import AIS, Vessel
+from src.environment.map import HelsingborgMap
+from src.environment.ais_old import AIS, Vessel
 
 
 def get_vessels_at_time(ais: AIS, timestamp: pd.Timestamp) -> List[Vessel]:

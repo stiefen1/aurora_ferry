@@ -1,0 +1,50 @@
+# AIS Data Mapping Configuration
+# Maps CSV column names to Vessel class attributes
+
+# Mandatory fields - at least one from each group must be present
+mandatory:
+  # Vessel identification
+  mmsi: ["mmsi", "MMSI", "Mmsi"]
+  
+  # Position - either lat/lon OR north/east required
+  latitude: ["latitude", "lat", "Latitude", "LAT", "Lat"]
+  longitude: ["longitude", "lon", "lng", "Longitude", "LON", "Lon"]
+  north: ["north", "North", "utm_north", "y"]
+  east: ["east", "East", "utm_east", "x"]
+  
+  # Motion data
+  sog: ["sog", "SOG", "Sog", "speed_over_ground", "speed", "Speed"]
+  cog: ["cog", "COG", "Cog", "course_over_ground", "course", "Course"]
+  heading: ["heading", "true_heading", "Heading", "TRUE_HEADING"]
+  
+  # Time
+  timestamp: ["timestamp", "Timestamp", "data_time_utc", "date_time_utc", "time", "Time", "datetime"]
+
+# Optional fields with defaults
+optional:
+  name: 
+    columns: ["name", "vessel_name", "Name", "VESSEL_NAME"]
+    default: "Unknown"
+  
+  vessel_type:
+    columns: ["ship_type", "Ship_type", "vessel_type", "type", "Type", "SHIP_TYPE"]
+    default: "Unknown"
+  
+  nav_status:
+    columns: ["nav_status", "Nav_status", "status", "navigation_status", "Status"]
+    default: "Unknown"
+  
+  length:
+    columns: ["length", "Length", "LOA", "loa"]
+    default: 22.0
+  
+  width:
+    columns: ["width", "Width", "beam", "Beam", "BEAM"]
+    default: 10.0
+
+# Coordinate system settings
+coordinates:
+  # UTM zone for lat/lon to UTM conversion (if needed)
+  utm_zone: 33
+  # Whether to automatically convert lat/lon to north/east
+  auto_convert_to_utm: true

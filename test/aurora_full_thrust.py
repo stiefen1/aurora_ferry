@@ -6,7 +6,7 @@ from python_vehicle_simulator.lib.map import RandomMapGenerator
 from python_vehicle_simulator.lib.actuator import AzimuthThruster
 from python_vehicle_simulator.lib.path import PWLPath
 import numpy as np, matplotlib.pyplot as plt
-from src.aurora import SingleAzimuthThrusterParameters, AuroraFerry
+from src.ferry.aurora import SingleAzimuthThrusterParameters, AuroraFerry
 
 dt = 0.1
 

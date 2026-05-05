@@ -44,7 +44,7 @@ class Vessel:
 class AIS(IDrawable, ISensor, pd.DataFrame):
     def __init__(
             self,
-            src: str = os.path.join('data', 'AIS.csv'),
+            src: str,
             path_to_folder: Optional[str] = None,
             filename: Optional[str] = None,
             verbose_level: int = 0

@@ -1,7 +1,7 @@
 from stable_baselines3.nmpc import BaseNMPC
 from python_vehicle_simulator.lib.control import Control
-from src.discrete_dynamics import get_discrete_3dof_dynamics_as_fn
-from src.aurora import AuroraFerryActuatorsParameters, AuroraFerryParameters
+from src.ferry.aurora import Aurora3Dynamics
+from src.ferry.aurora import AuroraFerryActuatorsParameters, AuroraFerryParameters
 import casadi as cs, numpy as np
 from typing import Optional, Dict, Tuple
 
@@ -13,7 +13,7 @@ class ParametricTrajectoryTracker(BaseNMPC):
             self,
             horizon: int,
             dt: float,
-            # Q: Optional[np.ndarray] = None,             # state cost (stage) -> used as learnable param for testing
+            # Q: Optional[np.ndarray] = None,           # state cost (stage) -> used as learnable param for testing
             QN: Optional[np.ndarray] = None,            # state cost (terminal)
             Qpsi: Optional[float] = None,               # heading cost (stage & terminal)
             Ra: Optional[np.ndarray] = None,            # alpha cost (stage)
@@ -42,12 +42,12 @@ class ParametricTrajectoryTracker(BaseNMPC):
         # Control.__init__(self)    
         BaseNMPC.__init__(
             self,
-            get_discrete_3dof_dynamics_as_fn(dt),
+            Aurora3Dynamics(dt)._fd,
             horizon,
             NX,
             NU,
-            np.concatenate([self.actuators_params.a_min, self.actuators_params.n_min]),
-            np.concatenate([self.actuators_params.a_max, self.actuators_params.n_max]),
+            np.concatenate([self.actuators_params.alpha_min, self.actuators_params.speed_min]),
+            np.concatenate([self.actuators_params.alpha_max, self.actuators_params.speed_max]),
             learnable_params=learnable_params,
             params={
                 "wpts": (3, horizon + 1),

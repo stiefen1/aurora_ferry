@@ -232,7 +232,7 @@ class HelsingborgMap(IDrawable):
 
 
 if __name__ == "__main__":
-    from ais import AIS
+    from src.environment.ais_old import AIS
     import pandas as pd
     ais = AIS()
     env = HelsingborgMap()
