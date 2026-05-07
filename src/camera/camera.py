@@ -1,11 +1,13 @@
 from python_vehicle_simulator.lib.noise import INoise
 from python_vehicle_simulator.lib.sensor import ISensor
+from python_vehicle_simulator.utils.math_fn import ssa
 import numpy as np, os, pandas as pd, numpy.typing as npt, yaml, pyproj
 from math import isnan
 from typing import Tuple, Dict, List, Optional, Any
 from datetime import datetime
 from src.ais.ais import Vessel
-from src.camera.weather import is_target_detected
+# from src.camera.weather import is_target_detected
+from dataclasses import dataclass
 
 
 """
@@ -21,6 +23,9 @@ We probably assume the detector does not provide a good distance measure of targ
 
 DEFAULT_CAMERA_MAPPING_FILE = 'config.yaml'
 
+@dataclass
+class CameraParams:
+    fov = 0
 
 class Camera(ISensor):
     def __init__(
@@ -31,6 +36,7 @@ class Camera(ISensor):
             tf: Optional[datetime] = None,
             mmsi_to_exclude: List[int] = [],
             update_every_sec: int = 1,
+            params: CameraParams = CameraParams(),
             **kwargs
         ):
         """
@@ -48,6 +54,7 @@ class Camera(ISensor):
         self.tf = tf
         self.mmsi_to_exclude = mmsi_to_exclude
         self.update_every_sec = update_every_sec
+        self.params = params
         super().__init__(**kwargs)
 
         # Load mapping configuration
@@ -297,9 +304,10 @@ class Camera(ISensor):
         detected_vessels: List[Vessel] = []
         all_vessels_in_camera = self.get_vessels_at_time(target_time, time_tolerance=time_tolerance)
         
+        info = {}
         for vessel in all_vessels_in_camera:
             # Check if target is detected based on position, size, and weather conditions
-            detected, info = is_target_detected(
+            detected, info_i = self.is_target_detected(
                 states[0:2], 
                 np.array([vessel.north, vessel.east, np.deg2rad(vessel.heading)]), 
                 vessel.length, 
@@ -309,25 +317,85 @@ class Camera(ISensor):
             )
             if detected:
                 detected_vessels.append(vessel)
-                
+
+                # Build a dict of list that contains info for each detected vessel
+                for key in info_i.keys():
+                    if key in info.keys(): # If other data already exist
+                        info[key].append(info_i[key])
+                    else: # If it's a new key, create a list
+                        info[key] = [info_i[key]]
         
-        info = {'all_vessels_in_camera': all_vessels_in_camera}
+        info = info | {'all_vessels_in_camera': all_vessels_in_camera}
         return detected_vessels, info
     
-def get_camera_covariance(distance: float | npt.NDArray, visibility: float, illumination: float) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
-    """
-    Return covariance of relative bearing angle (rad^2) and distance (m^2) depending on distance and weather.
+    def get_camera_covariance(self, distance: float | npt.NDArray, visibility: float, illumination: float) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
+        """
+        Return covariance of relative bearing angle (rad^2) and distance (m^2) depending on distance and weather.
 
-    Target size is not taken into account for now. 
-    """
-    sqrt_vis_ill = np.sqrt(visibility * illumination)
-    a_gamma = np.deg2rad(2e-7) + np.deg2rad(3e-7) * (1 - sqrt_vis_ill)
-    a_dist = 1.5e-4 + 2e-4 * (1 - sqrt_vis_ill)
+        Target size is not taken into account for now. 
+        """
+        sqrt_vis_ill = np.sqrt(visibility * illumination)
+        a_gamma = np.deg2rad(2e-7) + np.deg2rad(3e-7) * (1 - sqrt_vis_ill) # To be provided as camera params
+        a_dist = 1.5e-4 + 2e-4 * (1 - sqrt_vis_ill)
 
-    c_gamma = np.deg2rad(0.1) + np.deg2rad(0.4) * (1 - sqrt_vis_ill)
-    c_dist = 50 + 400 * (1 - sqrt_vis_ill)
+        c_gamma = np.deg2rad(0.1) + np.deg2rad(0.4) * (1 - sqrt_vis_ill)
+        c_dist = 50 + 400 * (1 - sqrt_vis_ill)
 
-    return (a_gamma * distance**2 + c_gamma, a_dist * distance**2 + c_dist)
+        return (a_gamma * distance**2 + c_gamma, a_dist * distance**2 + c_dist)
+    
+    def get_detection_probability(
+            self,
+            os_ne: npt.NDArray,
+            ts_neyaw: npt.NDArray,
+            loa: float,
+            beam: float,
+            visibility: float,
+            illumination: float,
+        ) -> Tuple[float | npt.NDArray, Dict]:
+        """
+        Compute the probability of detection using a camera.
+
+        os_ne: N-E position of the own ship with shape (2,) or (2, N)
+        ts_neyaw: N-E-Yaw pose of the own ship with shape (3,) or (3, N)
+        loa: Lenght-Over-All [m] of the target ship 
+        beam: Beam [m] of the target ship 
+        visibility: scalar ranging from 0 (dense fog) to 1 (clear)
+        illumination: scalar randing from 0 (night) to 1 (daylight)
+        
+        """
+        os_ne = np.reshape(os_ne, (-1, 2))
+        ts_neyaw = np.reshape(ts_neyaw, (-1, 3))
+        yaw_ts = ssa(ts_neyaw[:, 2])
+        xy_os, xy_ts = np.array([os_ne[:, 1], os_ne[:, 0]]).T, np.array([ts_neyaw[:, 1], ts_neyaw[:, 0]]).T
+        xy_rel = xy_ts - xy_os
+        rel_angle = ssa(np.atan2(xy_rel[:, 0], xy_rel[:, 1]))
+        delta_angle_abs = abs(ssa(yaw_ts - rel_angle))
+        rel_distance = np.linalg.norm(xy_rel, axis=1)
+
+        corrected_size =  0.5 * (beam + loa) - 0.5 * np.cos(2*delta_angle_abs) * (loa - beam) # beam when 0 and loa when pi/2
+        half_fov_rad = np.atan(corrected_size / 2 / rel_distance)
+        fov = 2*np.rad2deg(half_fov_rad)
+        sqrt_vis_ill = np.sqrt(visibility * illumination)
+        scale = 0.5 - 0.4 * sqrt_vis_ill
+        offset = 4 - 3 * sqrt_vis_ill
+
+        # p -> 0 when FOV -> 0
+        # p -> 1 when FOV -> 30
+        # p -> 0 when sqrt_vis_ill -> 0
+        return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {"corrected_size": corrected_size, "rel_angle": rel_angle.item(), "rel_distance": rel_distance.item()} # "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
+
+    def is_target_detected(
+            self,
+            os_ne: npt.NDArray,
+            ts_neyaw: npt.NDArray,
+            loa: float,
+            beam: float,
+            visibility: float,
+            illumination: float
+        ) -> Tuple[bool, Dict]:
+        p, info = self.get_detection_probability(os_ne, ts_neyaw, loa, beam, visibility, illumination)
+        val = np.random.uniform(low=0, high=1)
+        return bool(val <= p), info
 
 if __name__ == "__main__":
     import numpy as np, matplotlib.pyplot as plt

@@ -63,20 +63,19 @@ def get_detection_probability(
     xy_rel = xy_ts - xy_os
     rel_angle = ssa(np.atan2(xy_rel[:, 0], xy_rel[:, 1]))
     delta_angle_abs = abs(ssa(yaw_ts - rel_angle))
+    rel_distance = np.linalg.norm(xy_rel, axis=1)
 
     corrected_size =  0.5 * (beam + loa) - 0.5 * np.cos(2*delta_angle_abs) * (loa - beam) # beam when 0 and loa when pi/2
-    half_fov_rad = np.atan(corrected_size / 2 / np.linalg.norm(xy_rel, axis=1))
+    half_fov_rad = np.atan(corrected_size / 2 / rel_distance)
     fov = 2*np.rad2deg(half_fov_rad)
     sqrt_vis_ill = np.sqrt(visibility * illumination)
     scale = 0.5 - 0.4 * sqrt_vis_ill
-    offset = 8 - 6 * sqrt_vis_ill
+    offset = 4 - 3 * sqrt_vis_ill
 
     # p -> 0 when FOV -> 0
     # p -> 1 when FOV -> 30
     # p -> 0 when sqrt_vis_ill -> 0
-    # return 2/(1+np.exp(-(sqrt_vis_ill**2-1)/1)) * 1 / (1 + 1 * np.exp(-(fov-offset)/scale) )
-    # return np.clip((fov)**2, 0, 1)
-    return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {"corrected_size": corrected_size, "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
+    return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {"corrected_size": corrected_size, "rel_angle": rel_angle.item(), "rel_distance": rel_distance.item()} # "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
 
 def is_target_detected(
         os_ne: npt.NDArray,
