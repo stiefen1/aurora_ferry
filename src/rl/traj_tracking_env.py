@@ -144,6 +144,7 @@ class TrajTrackingEnv(gym.Env):
                                *self.thruster_speeds_range["max"]])
         
         self.own_vessel.reset(random=True, seed=seed, x_min=x_init_min, x_max=x_init_max)
+        self.prev_states = self.own_vessel.states.copy()
 
         R_se = np.diag(self.np_random.uniform(self.odm.sensors['states']['noise-covariance']["min"], self.odm.sensors['states']['noise-covariance']["max"]))
         self.own_vessel.navigation=NavigationAurora(
@@ -235,6 +236,8 @@ class TrajTrackingEnv(gym.Env):
             self.sample_new_target_speed()
             self.current_waypoint += 1
 
+        self.prev_states = self.own_vessel.states.copy()
+
         return observation, reward, terminated, truncated, info
 
     def sample_new_target_speed(self) -> None:
@@ -260,7 +263,7 @@ class TrajTrackingEnv(gym.Env):
             1 -
             (self.dist_to_target()/1300) - # / 500
             self.speed_error() / self.own_vessel.vessel_params.surge_speed_max -
-            self.weighted_power_consumption() / 100
+            self.weighted_power_consumption() / 5 # 25 # 50 # 100
         )
     
     def speed_error(self) -> float:
@@ -281,10 +284,12 @@ class TrajTrackingEnv(gym.Env):
     def weighted_power_consumption(self, w: Optional[npt.NDArray] = None) -> float:
         if w is None:
             w = np.diag(np.concatenate([
-                10 / (self.actuators_params.alpha_max - self.actuators_params.alpha_min)**2,
+                50 / (self.actuators_params.alpha_max - self.actuators_params.alpha_min)**2, # 10 / ...
                 1 / (self.actuators_params.speed_max - self.actuators_params.speed_min)**2,
-            ])) / 100.0 # 50
-        return float((self.own_vessel.states[12:20] @ w @ self.own_vessel.states[12:20]))
+            ])) / 100.0
+
+        dx = np.concatenate([self.own_vessel.states[12:16] - self.prev_states[12:16], self.own_vessel.states[16:20]])
+        return float((dx @ w @ dx))
     
     def collision(self) -> bool:
         """

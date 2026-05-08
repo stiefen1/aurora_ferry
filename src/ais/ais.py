@@ -91,7 +91,7 @@ class AIS(ISensor):
         # Validate required columns exist
         self._validate_data()
         
-    def __get__(self, target_time: datetime, *args, time_tolerance: int = 30, **kwargs) -> Tuple[Any, Any]:
+    def __get__(self, target_time: datetime, *args, time_tolerance: int = 30, **kwargs) -> Tuple[Any, Dict]:
         """
         Noiseless measurement
         """

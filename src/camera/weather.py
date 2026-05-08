@@ -69,13 +69,13 @@ def get_detection_probability(
     half_fov_rad = np.atan(corrected_size / 2 / rel_distance)
     fov = 2*np.rad2deg(half_fov_rad)
     sqrt_vis_ill = np.sqrt(visibility * illumination)
-    scale = 0.5 - 0.4 * sqrt_vis_ill
-    offset = 4 - 3 * sqrt_vis_ill
+    scale = 0.7 - 0.35 * sqrt_vis_ill
+    offset = 3 - 2 * sqrt_vis_ill
 
     # p -> 0 when FOV -> 0
     # p -> 1 when FOV -> 30
     # p -> 0 when sqrt_vis_ill -> 0
-    return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {"corrected_size": corrected_size, "rel_angle": rel_angle.item(), "rel_distance": rel_distance.item()} # "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
+    return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {}#{"corrected_size": corrected_size, "rel_angle": rel_angle.item(), "rel_distance": rel_distance.item()} # "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
 
 def is_target_detected(
         os_ne: npt.NDArray,
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     ts_neyaw = os_neyaw + rel_dir_vec * d[:, None]
     print("SHAPE: ", ts_neyaw.shape)
 
-    ts_neyaw[:, 2] = np.deg2rad(135)
+    ts_neyaw[:, 2] = np.deg2rad(45)
 
     # ts_neyaw = np.array([400, 300, np.deg2rad(45)])
     size = [(50, 20), (75, 30), (100, 40)]

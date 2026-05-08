@@ -227,6 +227,7 @@ class RLTrajTrackingController(IControl, ABC):
         return self.map_action_to_command(action), {}
     
     def __plot__(self, ax:Axes, *args, verbose:int=0, **kwargs) -> Axes:
-        for target in self.targets: # target are in NE frame
-            ax.scatter(target[1], target[0], c='red')
+        if verbose >= 4:
+            for target in self.targets: # target are in NE frame
+                ax.scatter(target[1], target[0], c='red')
         return ax

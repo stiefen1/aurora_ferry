@@ -342,7 +342,6 @@ class AuroraFerry(IVessel):
         y = North
         z = -depth
         """
-        ax.scatter(self.eta[1], self.eta[0], *args, **kwargs)
         ax.plot(*self.geometry_for_2D_plot, *args, **kwargs)
         for i in range(4):
             envelope = (ROTATION_MATRIX(self.states[12 + i]) @ self.actuator_params.geometries[i].T) + self.actuator_params.xy[i].reshape(-1, 1)

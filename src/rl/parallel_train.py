@@ -16,15 +16,20 @@ name_prefix = "aurora"
 alg = "sac"
 
 dt = 0.2
+N_WPTS = 2
+WPTS_SPACE_MULTIPLICATOR = 10
+
 def make_env():
     env = TrajTrackingEnv(
-        dt
+        dt,
+        n_wpts=N_WPTS,
+        wpts_space_multiplicator=WPTS_SPACE_MULTIPLICATOR
     )
     return gym.wrappers.FlattenObservation(env) # Needed for Dict observation space
 
 
 if __name__ == '__main__':
-    n_envs = 6
+    n_envs = 5
     vec_env = make_vec_env(make_env, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
 
@@ -57,7 +62,7 @@ if __name__ == '__main__':
             raise ValueError(f"Selected algorithm invalid")
         
     model.learn(
-        total_timesteps=3_000_000,
+        total_timesteps=2_000_000,
         tb_log_name=name_prefix,
         callback=checkpoint_callback
     )
@@ -65,4 +70,4 @@ if __name__ == '__main__':
     # Save NN weights
     models_path = os.path.join(root_dir, 'models', alg, today_and_now, name_prefix)
     model.save(models_path)
-    TrajTrackingEnv(dt).export_observation_space_ranges_to(os.path.join(root_dir, 'models', alg, today_and_now, "observation_space_ranges.json"))
+    TrajTrackingEnv(dt, n_wpts=N_WPTS, wpts_space_multiplicator=WPTS_SPACE_MULTIPLICATOR).export_observation_space_ranges_to(os.path.join(root_dir, 'models', alg, today_and_now, "observation_space_ranges.json"))

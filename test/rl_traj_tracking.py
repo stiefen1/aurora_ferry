@@ -25,22 +25,23 @@ time_window = (t0, t0 + timedelta(seconds=duration))
 
 u_des = 6
 dt = 0.2
-path_to_sac_params = 'models\\sac\\2026_04_30_22_20_25'
+path_to_sac_params = 'models\\sac\\2026_05_07_09_24_00'
 start_ne = helsingborg.get_ferry_routes()['Helsingør (DK) - Helsingborg (SE)'].waypoints[0] 
 start_ne[1] += 200
 states = np.array([*start_ne] + 3 * [0] + [np.deg2rad(70)] + 14*[0])
 
-n_passengers = 100 # 10-1250
-n_cars = 100 # 0-240
+n_passengers = 1000 # 10-1250
+n_cars = 200 # 0-240
 
 AURORA_AF_HELSINGBORG_MMSI = 265041000
+SEED = 42
 
-# TODO: Implement actual measurement model for camera
 # TODO: Find the best way to check collision with target ships
 # TODO: Automate scenario generation from both sides of the crossing (how can I make it consistent with the other ferry ?)
 # TODO: SHOULD WE LIMIT THE DETECTION ANGLE OF THE CAMERA (FOV) ?
-# TODO: Terminate simulation when target is reached
-# TODO: Improve policy -> oscillations, tracking accuracy
+# TODO: add np.random in Camera + reset()
+# TODO: forward uncertainty from kalman filter pose estimation to timespace colav ?
+# TODO: Should we assume camera is capable of estimating heading ? otherwise it's almost impossible to rely only on camera
 
 aurora = AuroraFerry(
     dt,
@@ -72,18 +73,79 @@ aurora = AuroraFerry(
     guidance=TimespaceGuidance(
         global_path=helsingborg.get_ferry_routes()['Helsingør (DK) - Helsingborg (SE)'],
         u_des=u_des,
-        shore=[poly.simplify(3e2) for poly in helsingborg.polygons],
         update_every_sec=30,
         lookahead_distance=1000,
         colregs=True,
         good_seamanship=True,
-        abort_colregs_after_iter=5,
+        abort_colregs_after_iter=1,
+        buffer_target_ships=200,
     ),
     n_cars=n_cars,
     n_passengers=n_passengers
 )
 
+current_params = {
+        "angle": {
+            "min": -3.14159,
+            "max": 3.14159,
+            "ornstein-uhlenbeck": {
+                "attraction": 0.01,
+                "amplitude": 0.05
+            }
+        },
+        "speed": {
+            "min": 0,
+            "max": 2,
+            "ornstein-uhlenbeck": {
+                "attraction": 0.01,
+                "amplitude": 0.1
+            }
+        }
+    }
 
-env = NavEnv(aurora, [], [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in helsingborg.polygons], dt, wind=Wind(0, 1), current=Current(0, 0.01))
-sim = Simulator(env, dt=dt, skip_frames=10, render_mode='human', window_size=(3000, 3000), verbose=3)
+wind_params = {
+        "angle":{
+            "min": -3.14159,
+            "max": 3.14159,
+            "ornstein-uhlenbeck": {
+                "attraction": 0.01,
+                "amplitude": 0.05
+            }
+        },
+        "speed": {
+            "min": 0,
+            "max": 20,
+            "ornstein-uhlenbeck": {
+                "attraction": 0.01,
+                "amplitude": 0.1
+            }
+        }
+    }
+
+# Sample wind current values
+wind = Wind(
+    np.random.uniform(wind_params["angle"]["min"], wind_params["angle"]["max"]),
+    np.random.uniform(wind_params["speed"]["min"], wind_params["speed"]["max"]),
+    attraction_beta=wind_params["angle"]["ornstein-uhlenbeck"]["attraction"],
+    amplitude_beta=wind_params["angle"]["ornstein-uhlenbeck"]["amplitude"],
+    attraction_norm=wind_params["speed"]["ornstein-uhlenbeck"]["attraction"],
+    amplitude_norm=wind_params["angle"]["ornstein-uhlenbeck"]["amplitude"],
+    dt=dt,
+    seed=SEED
+)
+
+current = Current(
+    np.random.uniform(current_params["angle"]["min"], current_params["angle"]["max"]),
+    np.random.uniform(current_params["speed"]["min"], current_params["speed"]["max"]),
+    attraction_beta=current_params["angle"]["ornstein-uhlenbeck"]["attraction"],
+    amplitude_beta=current_params["angle"]["ornstein-uhlenbeck"]["amplitude"],
+    attraction_norm=current_params["speed"]["ornstein-uhlenbeck"]["attraction"],
+    amplitude_norm=current_params["angle"]["ornstein-uhlenbeck"]["amplitude"],
+    dt=dt,
+    seed=SEED
+)
+
+
+env = NavEnv(aurora, [], [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in helsingborg.polygons], dt, wind=wind, current=current)
+sim = Simulator(env, dt=dt, skip_frames=10, render_mode='human', window_size=(6000, 2000), verbose=7)
 sim.run(duration, render=True, store_data=False, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=1.0, illumination=1.0, t0=time_window[0])
