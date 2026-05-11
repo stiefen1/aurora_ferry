@@ -1,0 +1,118 @@
+{
+  "seed": null,
+  "generated_at": "2026-05-11T14:51:27.262836+00:00",
+  "source_config": "src\\scenarios\\default_config.yaml",
+  "config_hash": "eb6d1d02",
+  "scenario_generation": {
+    "experiment_name": "aurora_ferry_test_scenario_batch",
+    "description": "Scenario sampling configuration based on odm_training.json",
+    "seed": 42,
+    "simulation": {
+      "duration_sec": 800,
+      "dt": 0.2,
+      "start_time_iso_utc": "2023-04-06T05:14:02.197826+00:00"
+    },
+    "guidance": {
+      "update_every_sec": 30,
+      "lookahead_distance": 1000,
+      "colregs": true,
+      "good_seamanship": true,
+      "abort_colregs_after_iter": 1,
+      "buffer_target_ships": 200
+    },
+    "navigation": {
+      "update_ais_every_sec": 1,
+      "update_camera_every_sec": 1
+    },
+    "control": {
+      "path_to_weights": "models/sac/2026_05_07_09_24_00",
+      "algorithm": "sac"
+    },
+    "ais_data_paths": "data/raw/2023_04_06.csv",
+    "mmsi_to_exclude": [
+      265041000
+    ],
+    "start": "Helsingor",
+    "operational_domain": {
+      "ferry": {
+        "target_speed": 6.872611054262549,
+        "mass": 2250000,
+        "passengers": {
+          "number": 159,
+          "mass": 74.98298996457059
+        },
+        "cars": {
+          "number": 82,
+          "mass": 1148.320841174786
+        }
+      },
+      "wind": {
+        "angle": {
+          "value": 0.7091345429412046,
+          "ornstein_uhlenbeck": {
+            "attraction": 0.01,
+            "amplitude": 0.05
+          }
+        },
+        "speed": {
+          "value": 13.612898659922344,
+          "ornstein_uhlenbeck": {
+            "attraction": 0.01,
+            "amplitude": 0.1
+          }
+        }
+      },
+      "current": {
+        "angle": {
+          "value": 2.9232702858603385,
+          "ornstein_uhlenbeck": {
+            "attraction": 0.01,
+            "amplitude": 0.05
+          }
+        },
+        "speed": {
+          "value": 1.707017562247514,
+          "ornstein_uhlenbeck": {
+            "attraction": 0.01,
+            "amplitude": 0.1
+          }
+        }
+      },
+      "illumination": 0.24192810651198016,
+      "visibility": 0.8333558716125788
+    },
+    "sensors": {
+      "states": {
+        "noise_covariance": [
+          0.0023765842237699415,
+          0.008634505868011146,
+          0.003054873072492564,
+          0.020094217980455787,
+          0.033916040001017014,
+          0.03469785304045455,
+          0.008447300667562956,
+          0.02434734018092538,
+          0.015129247046367528,
+          0.024733184516348424
+        ]
+      },
+      "ais": {
+        "noise_covariance": {
+          "value": [
+            4.850532565496634,
+            3.4000979672433935,
+            0.35691088244138813,
+            0.0068592151521963355
+          ],
+          "info": "measure states are N, E, SOG [kn], COG [rad]"
+        }
+      },
+      "camera": {
+        "failure": {
+          "time": "2023-04-06T05:18:25.832307+00:00"
+        },
+        "info": "probability of a camera blackout during an episode."
+      }
+    }
+  }
+}

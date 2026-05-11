@@ -1,0 +1,145 @@
+scenario_generation:
+  experiment_name: "aurora_ferry_test_scenario_batch"
+  description: "Scenario sampling configuration based on odm_training.json"
+  seed: 42
+  number_of_scenarios: 10
+
+  simulation:
+    duration_sec: 800
+    dt: 0.2
+
+  guidance: 
+    update_every_sec: 30
+    lookahead_distance: 1000
+    colregs: True
+    good_seamanship: True
+    abort_colregs_after_iter: 1
+    buffer_target_ships: 200
+
+  navigation:
+    update_ais_every_sec: 1
+    update_camera_every_sec: 1
+
+  control:
+    path_to_weights: 'models/sac/2026_05_07_09_24_00'
+    algorithm: 'sac'
+
+  ais_data_paths:
+    - "data/raw/2023_04_06.csv"
+    - "data/raw/2023_04_15.csv"
+
+  mmsi_to_exclude: [265041000]
+
+  start: ["Helsingborg", "Helsingor"]
+
+  operational_domain:
+    ferry:
+      target_speed:
+        min: 0
+        max: 7.5
+        mean: 6.5
+        std: 1
+      mass: 2250000
+      passengers:
+        number:
+          min: 10
+          max: 1250
+        mass:
+          min: 63
+          max: 93
+          std: 5
+          mean: 78
+      cars:
+        number:
+          min: 0
+          max: 240
+        mass:
+          min: 900
+          max: 1500
+          std: 100
+          mean: 1200
+
+    wind:
+      angle:
+        min: -3.14159
+        max: 3.14159
+        ornstein_uhlenbeck:
+          attraction: 0.01
+          amplitude: 0.05
+      speed:
+        min: 0.0
+        max: 20.0
+        ornstein_uhlenbeck:
+          attraction: 0.01
+          amplitude: 0.1
+
+    current:
+      angle:
+        min: -3.14159
+        max: 3.14159
+        ornstein_uhlenbeck:
+          attraction: 0.01
+          amplitude: 0.05
+      speed:
+        min: 0.0
+        max: 2.0
+        ornstein_uhlenbeck:
+          attraction: 0.01
+          amplitude: 0.1
+
+    illumination:
+      min: 0.0
+      max: 1.0
+
+    visibility:
+      min: 0.0
+      max: 1.0
+
+  sensors:
+    states:
+      noise_covariance:
+        min:
+          - 1e-3
+          - 1e-3
+          - 0.00035
+          - 5e-3
+          - 5e-3
+          - 5e-3
+          - 0.00314159
+          - 0.00314159
+          - 0.00314159
+          - 0.00314159
+        max:
+          - 1e-2
+          - 1e-2
+          - 0.0035
+          - 5e-2
+          - 5e-2
+          - 5e-2
+          - 0.0314159
+          - 0.0314159
+          - 0.0314159
+          - 0.0314159
+    ais:
+      noise_covariance:
+        min:
+          - 3.0
+          - 3.0
+          - 0.1
+          - 0.005
+        max:
+          - 5.0
+          - 5.0
+          - 0.5
+          - 0.015
+        info: "measure states are N, E, SOG [kn], COG [rad]"
+    camera:
+      failure:
+        prob: 0.9
+        time: 
+          min: 0
+          max: 1
+          mean: 0.3
+          std: 0.1
+      info: "probability of a camera blackout during an episode."
+
