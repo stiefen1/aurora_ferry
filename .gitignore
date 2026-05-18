@@ -9,5 +9,6 @@ __pycache__/
 checkpoints/
 tensorboard_logs/
 models/
+sim_data/
 
 debug/

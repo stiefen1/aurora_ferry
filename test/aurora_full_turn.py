@@ -6,21 +6,11 @@ from python_vehicle_simulator.lib.map import RandomMapGenerator
 from python_vehicle_simulator.lib.actuator import AzimuthThruster
 from python_vehicle_simulator.lib.path import PWLPath
 import numpy as np, matplotlib.pyplot as plt
-from aurora import SingleAzimuthThrusterParameters, AuroraFerry
+from src.ferry.aurora import SingleAzimuthThrusterParameters, AuroraFerry
 
 dt = 0.2
 
-ferry = AuroraFerry(
-        eta0=np.array([0, 0, 0, 0, 0, 0]),
-        nu0=np.array([0, 0, 0, 0, 0, 0]),
-        dt=dt,
-        actuators=[
-            AzimuthThruster(xy=(-35, -9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(-35, 9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(35, -9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters())),
-            AzimuthThruster(xy=(35, 9.4), length=2, width=1, **vars(SingleAzimuthThrusterParameters()))
-        ],
-    )
+ferry = AuroraFerry(dt)
 
 env = NavEnv(
     own_vessel=ferry,
@@ -40,12 +30,7 @@ sim = Simulator(
     )
 
 
-sim.run(tf=100, render=True, store_data=True, control_commands=[
-        np.array([-np.pi/4, 1e6]),
-        np.array([-3*np.pi/4, 1e6]),
-        np.array([np.pi/4, 1e6]),
-        np.array([3*np.pi/4, 1e6])
-    ])
+sim.run(tf=100, render=True, store_data=True, control_commands=np.array([-np.pi/2, -np.pi/2, np.pi/2, np.pi/2, 1e6, 1e6, 1e6, 1e6]))
 # sim.save_animation(os.path.join('videos', 'vessel_simulation'), format="gif", fps=15)
 
 fig2 = sim.plot_gnc_data_multi([

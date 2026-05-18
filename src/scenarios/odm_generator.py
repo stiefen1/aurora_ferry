@@ -1,27 +1,35 @@
 """
 Randomly sample an operational domain based on the admissible ranges provided in a yaml file and save it (json)
 """
+import pathlib
 from typing import LiteralString, Optional, Any
 
 import os, json, csv, hashlib, numpy as np, yaml
 from datetime import datetime, timezone
 
-DEFAULT_PATH_TO_CONFIG = os.path.join("src", "scenarios", "default_config.yaml")
+DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "test", "test.yaml")
 
 class ODMGenerator:
     def __init__(
             self,
             path_to_config: LiteralString,
-            seed: Optional[int] = None,
     ):
         self.path_to_config = path_to_config
-        self.seed = seed
-        self.rng = np.random.default_rng(seed)
         with open(self.path_to_config, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
+        self.seed = self.config["scenario_generation"]["seed"]
+        self.rng = np.random.default_rng(self.seed)
+        
 
-    def __call__(self, save_path: Optional[str] = None) -> None:
-        return self.sample(save_path)
+    def __call__(self, folder: str = "scenarios"):
+        for i in range(self.config["scenario_generation"]["number_of_scenarios"]):
+            path_to_config = pathlib.Path(self.path_to_config)
+            self.sample_single(os.path.join(
+                path_to_config.parent,
+                folder,
+                path_to_config.name.rsplit('.')[0] + f"_{i}.json"
+                )
+            )
 
     @staticmethod
     def _is_distribution_node(node: Any) -> bool:
@@ -143,11 +151,16 @@ class ODMGenerator:
                         except ValueError:
                             pass
 
-                raw = (row.get("timestamp_sec") or "").strip()
+                raw = (row.get("timestamp") or "").strip()
                 if not raw:
                     continue
                 try:
-                    t = float(raw)
+                    dt = datetime.fromisoformat(raw)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    else:
+                        dt = dt.astimezone(timezone.utc)
+                    t = dt.timestamp()
                 except ValueError:
                     continue
 
@@ -159,9 +172,9 @@ class ODMGenerator:
         if min_t is None or max_t is None:
             if excluded_mmsi:
                 raise ValueError(
-                    f"No valid timestamp_sec values found in CSV after applying mmsi_to_exclude: {csv_path}"
+                    f"No valid timestamp values found in CSV after applying mmsi_to_exclude: {csv_path}"
                 )
-            raise ValueError(f"No valid timestamp_sec values found in CSV: {csv_path}")
+            raise ValueError(f"No valid timestamp values found in CSV: {csv_path}")
 
         return min_t, max_t
 
@@ -210,6 +223,9 @@ class ODMGenerator:
         start_iso = datetime.fromtimestamp(start_sec, tz=timezone.utc).isoformat()
 
         simulation_cfg["start_time_iso_utc"] = start_iso
+
+        print(t_min, t_max, start_sec, start_iso, duration_sec, csv_path)
+
         return start_sec, duration_sec
 
     def _resolve_failure_times(self, node: Any, start_sec: float, duration_sec: float) -> None:
@@ -225,8 +241,8 @@ class ODMGenerator:
         for value in node.values():
             self._resolve_failure_times(value, start_sec, duration_sec)
 
-    def sample(self, save_path: Optional[str] = None) -> None:
-        save_path = save_path or self.path_to_config.rsplit(".", 1)[0] + ".json"
+    def sample_single(self, save_path: Optional[str] = None) -> None:
+        save_path = save_path or (self.path_to_config.rsplit(".", 1)[0] + ".json")
         scenario_generation = self.config.get("scenario_generation", self.config)
         sampled = self._sample_node(scenario_generation)
         if isinstance(sampled, dict):
@@ -261,4 +277,11 @@ class ODMGenerator:
 
 if __name__ == "__main__":
     odm_gen = ODMGenerator(DEFAULT_PATH_TO_CONFIG, seed=None)
-    odm_gen.sample()
+    odm_gen()
+
+    # config.yaml
+    ### sim1
+    ##### config1.json
+    ##### sim_results1
+    ######## data.npz
+    ######## data.jsonl

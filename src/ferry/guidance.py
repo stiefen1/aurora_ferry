@@ -36,6 +36,8 @@ class TimespaceGuidance(IGuidance):
             buffer_target_ships: float = 300.0,
             speed_factor: float = 0.98,
             term_dist: float = 500.0,
+            dchi: float = 1.0,
+            du: float = 0.1,
             **kwargs
     ):
         self.global_path = global_path
@@ -47,6 +49,8 @@ class TimespaceGuidance(IGuidance):
         self.good_semanship = good_seamanship
         self.buffer_target_ships = buffer_target_ships
         self.term_dist = term_dist
+        self.dchi = dchi
+        self.du = du
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> bool:
@@ -67,19 +71,23 @@ class TimespaceGuidance(IGuidance):
             ships_for_projection: List[MovingShip] = []
             for vessel in target_vessels:
                 if vessel.heading is not None and vessel.cog is not None and vessel.sog is not None:
-                    ships_for_projection.append(MovingShip.from_csog((vessel.east, vessel.north), vessel.heading, vessel.cog, knot_to_m_per_sec(vessel.sog), vessel.length, vessel.width, degrees=True, mmsi=vessel.mmsi, dchi=1, du=0.1).buffer(self.buffer_target_ships, join_style='mitre'))
+                    ships_for_projection.append(MovingShip.from_csog((vessel.east, vessel.north), vessel.heading, vessel.cog, knot_to_m_per_sec(vessel.sog), vessel.length, vessel.width, degrees=True, mmsi=vessel.mmsi, dchi=self.dchi, du=self.du).buffer(self.buffer_target_ships, join_style='mitre'))
                 
             # distance_along_global_path = self.global_path.
             pf_ne = self.global_path.get_target_wpts_from(states[0], states[1], self.lookahead_distance, 2)[1]
-            traj, info = self.planner.get(
-                (states[1], states[0]),
-                (pf_ne[1], pf_ne[0]),
-                ships_for_projection,
-                heading=states[5],
-                degrees=False,
-                ts_in_TSS=True,
-                good_seamanship=self.good_semanship
-            )
+            try:
+                traj, info = self.planner.get(
+                    (states[1], states[0]),
+                    (pf_ne[1], pf_ne[0]),
+                    ships_for_projection,
+                    heading=states[5],
+                    degrees=False,
+                    ts_in_TSS=True,
+                    good_seamanship=self.good_semanship
+                )
+            except:
+                print(f"Error while planning avoidance maneuver")
+                traj = None
 
             if traj is not None: # valid trajectory was found
                 if isclose(traj(0)[0], states[1]) and  isclose(traj(0)[1], states[0]): # There are small numerical errors
@@ -91,7 +99,11 @@ class TimespaceGuidance(IGuidance):
             elapsed_time = (timestamp-self.t0).total_seconds()
             # print(f"Elapsed time: {elapsed_time:.3f} seconds", " Trajectory: ", self.traj.xyt, "ne: ", states[0:2])
             # return np.array(20*[0]), {'path': self.global_path, 'V_des': self.planner.desired_speed}
-            return np.array(20*[0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': self.traj.get_speed(elapsed_time)} | info | {'term': terminated}
+
+            p_des = self.traj.get_closest_point(states[1], states[0]) # east-north
+            #  'ne_des': (p_des[1], p_des[0])
+
+            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [self.traj.get_speed(elapsed_time)] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': self.traj.get_speed(elapsed_time)} | info | {'term': terminated}
 
         # self.prev = {'eta_des': states[0:6], 'nu_des': states[6:12], 'states_des': states, 'info': self.prev['info']}
         return states, {'path': None, 'V_des': None, 'term': terminated} # type:ignore

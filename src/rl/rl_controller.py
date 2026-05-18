@@ -88,7 +88,7 @@ class RLTrajTrackingController(IControl, ABC):
         self.dt = ranges_config["dt"]
         self.wpts_space_multiplicator = ranges_config["wpts_space_multiplicator"]
         self.n_wpts = ranges_config["n_wpts"]
-        self.counter: int = self.action_repeat
+        self.counter: int = self.action_repeat - 1
 
         print(f"Loaded environment configuration from {config_path}")
 
@@ -211,7 +211,7 @@ class RLTrajTrackingController(IControl, ABC):
         if path is None or V_des is None:
             return self.prev['u'], {}
         
-        if not(self.counter == self.action_repeat):
+        if not(self.counter == self.action_repeat - 1):
             self.counter += 1
             return self.prev['u'], self.prev['info']
 

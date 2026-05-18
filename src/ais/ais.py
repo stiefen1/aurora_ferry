@@ -1,7 +1,7 @@
 import os, yaml, pyproj, pandas as pd, numpy as np
 from math import isnan
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from matplotlib.axes import Axes
 from python_vehicle_simulator.utils.math_fn import Rzyx, ssa
@@ -373,3 +373,33 @@ class AIS(ISensor):
                 ax.text(vessel.east, vessel.north, f"Invalid geometry, heading={vessel.heading}")
         ax.set_aspect('equal')
         return ax
+    
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    
+    # Load default AIS data
+    csv_path = os.path.join(os.path.dirname(__file__), '../../data/raw/', DEFAULT_AIS_DATA)
+    ais = AIS(csv_path)
+    all_vessels = ais.get_all_vessels()
+    
+    # Group by MMSI and plot trajectories
+    fig, ax = plt.subplots(figsize=(14, 10))
+    mmsi_groups = {}
+    for vessel in all_vessels:
+        if vessel.mmsi not in mmsi_groups:
+            mmsi_groups[vessel.mmsi] = []
+        mmsi_groups[vessel.mmsi].append(vessel)
+    
+    for mmsi, vessels in mmsi_groups.items():
+        north_vals = [v.north for v in sorted(vessels, key=lambda v: v.timestamp)]
+        east_vals = [v.east for v in sorted(vessels, key=lambda v: v.timestamp)]
+        ax.plot(east_vals, north_vals, marker='.', alpha=0.7, label=f"MMSI {mmsi}")
+    
+    ax.set_xlabel("East (m)")
+    ax.set_ylabel("North (m)")
+    ax.set_title("AIS Trajectories")
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    plt.show()

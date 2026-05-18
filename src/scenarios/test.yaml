@@ -2,7 +2,7 @@ scenario_generation:
   experiment_name: "aurora_ferry_test_scenario_batch"
   description: "Scenario sampling configuration based on odm_training.json"
   seed: 42
-  number_of_scenarios: 10
+  number_of_scenarios: 6
 
   simulation:
     duration_sec: 800
@@ -10,15 +10,19 @@ scenario_generation:
 
   guidance: 
     update_every_sec: 30
-    lookahead_distance: 1000
+    lookahead_distance: 1000.0
     colregs: True
     good_seamanship: True
     abort_colregs_after_iter: 1
-    buffer_target_ships: 200
+    buffer_target_ships: 100.0
+    term_dist: 500.0
+    dchi: 5.0
+    du: 0.5
 
   navigation:
-    update_ais_every_sec: 1
-    update_camera_every_sec: 1
+    q_tt: [1, 1, 0.01, 0.0003]
+    r_ais: [10, 10, 0.04, 0.00122]
+    r_camera: [0.00008, 640000]
 
   control:
     path_to_weights: 'models/sac/2026_05_07_09_24_00'
@@ -35,9 +39,9 @@ scenario_generation:
   operational_domain:
     ferry:
       target_speed:
-        min: 0
+        min: 6.5
         max: 7.5
-        mean: 6.5
+        mean: 7.0
         std: 1
       mass: 2250000
       passengers:
@@ -64,14 +68,15 @@ scenario_generation:
         min: -3.14159
         max: 3.14159
         ornstein_uhlenbeck:
-          attraction: 0.01
+          attraction: 0.03
           amplitude: 0.05
       speed:
         min: 0.0
-        max: 20.0
+        max: 15.0
         ornstein_uhlenbeck:
-          attraction: 0.01
+          attraction: 0.03
           amplitude: 0.1
+      info: "According to https://app.fcoo.dk/ifm-maps/denmark/, wind up to 15m/s in any direction"
 
     current:
       angle:
@@ -82,10 +87,11 @@ scenario_generation:
           amplitude: 0.05
       speed:
         min: 0.0
-        max: 2.0
+        max: 1.0
         ornstein_uhlenbeck:
           attraction: 0.01
           amplitude: 0.1
+      info: "According to https://app.fcoo.dk/ifm-maps/denmark/, current up to 2kn in both directions"
 
     illumination:
       min: 0.0
@@ -121,6 +127,8 @@ scenario_generation:
           - 0.0314159
           - 0.0314159
     ais:
+      enabled: True
+      update_every_sec: 1
       noise_covariance:
         min:
           - 3.0
@@ -134,8 +142,10 @@ scenario_generation:
           - 0.015
         info: "measure states are N, E, SOG [kn], COG [rad]"
     camera:
+      enabled: True
+      update_every_sec: 1
       failure:
-        prob: 0.9
+        prob: 0.0
         time: 
           min: 0
           max: 1

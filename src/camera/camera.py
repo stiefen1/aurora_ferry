@@ -1,7 +1,9 @@
+from optparse import Option
+
 from python_vehicle_simulator.lib.noise import INoise
 from python_vehicle_simulator.lib.sensor import ISensor
 from python_vehicle_simulator.utils.math_fn import ssa
-import numpy as np, os, pandas as pd, numpy.typing as npt, yaml, pyproj
+import numpy as np, os, pandas as pd, numpy.typing as npt, yaml, pyproj, gymnasium as gym
 from math import isnan
 from typing import Tuple, Dict, List, Optional, Any
 from datetime import datetime
@@ -37,6 +39,8 @@ class Camera(ISensor):
             mmsi_to_exclude: List[int] = [],
             update_every_sec: int = 1,
             params: CameraParams = CameraParams(),
+            failure: Optional[Dict] = None,
+            seed: Optional[int] = None,
             **kwargs
         ):
         """
@@ -55,6 +59,12 @@ class Camera(ISensor):
         self.mmsi_to_exclude = mmsi_to_exclude
         self.update_every_sec = update_every_sec
         self.params = params
+
+        if failure is not None:
+            self.failure_time = pd.to_datetime(failure["time"])
+        else:
+            self.failure_time = None
+
         super().__init__(**kwargs)
 
         # Load mapping configuration
@@ -84,6 +94,13 @@ class Camera(ISensor):
         
         if len(self.df) == 0:
             raise ValueError(f"No camera data found in the specified time range or after filtering")
+        
+        self.reset(seed=seed)
+
+    def failure(self, time: pd.Timestamp) -> bool:
+        if self.failure_time is not None:
+            return time >= self.failure_time
+        return False
 
     def _create_column_mapping(self) -> Dict[str, str]:
         """Create mapping from Vessel attributes to actual CSV columns."""
@@ -194,6 +211,9 @@ class Camera(ISensor):
         
         # Convert target time to pandas datetime and handle timezone issues
         target_pd = pd.to_datetime(target_time)
+
+        if self.failure(target_pd):
+            return []
         
         # Get unique vessels
         mmsi_col = self.column_mapping['mmsi']
@@ -315,7 +335,7 @@ class Camera(ISensor):
         ts_states[:, 2] = ssa(np.deg2rad(ts_states[:, 2])) # Convert heading to radians in (-pi, pi)
 
         # Compute relative angles and distances w.r.t to own ship
-        rel_angles, rel_distances = self.get_rel_angles_and_distances(states, ts_states[0:3])
+        rel_angles, rel_distances = self.get_rel_angles_and_distances(states, ts_states[:, 0:3])
         
         detected, info = self.is_target_detected(
                 rel_angles,
@@ -326,14 +346,15 @@ class Camera(ISensor):
                 visibility, 
                 illumination
             )
-
+        
         detected_vessels: List[Vessel] = np.array(all_vessels)[detected == True].tolist()
 
         angles_std, distances_std = self.get_camera_std(rel_distances[detected == True], visibility, illumination)
         angles_cov, distances_cov = angles_std**2, distances_std**2
         if len(detected_vessels) > 0:
-            noisy_rel_angles = np.random.multivariate_normal(rel_angles[detected == True], np.diag(angles_cov))
-            noisy_rel_distances = np.random.multivariate_normal(rel_distances[detected == True], np.diag(distances_cov))
+            rel_angles_wrt_psi = ssa(rel_angles - states[5])
+            noisy_rel_angles = self.np_random.multivariate_normal(rel_angles_wrt_psi[detected == True], np.diag(angles_cov))
+            noisy_rel_distances = self.np_random.multivariate_normal(rel_distances[detected == True], np.diag(distances_cov))
         else:
             noisy_rel_angles = np.array([])
             noisy_rel_distances = np.array([])
@@ -404,8 +425,11 @@ class Camera(ISensor):
             illumination: float
         ) -> Tuple[np.bool, Dict]:
         p, info = self.get_detection_probability(rel_angles, rel_distances, yaw_ts, loa, beam, visibility, illumination)
-        val = np.random.uniform(low=0, high=1, size=rel_angles.shape[0])
+        val = self.np_random.uniform(low=0, high=1, size=rel_angles.shape[0])
         return np.bool(val <= p), info
+    
+    def reset(self, seed: Optional[int] = None) -> None:
+        self.np_random, _ = gym.utils.seeding.np_random(seed) # type: ignore
 
 if __name__ == "__main__":
     import numpy as np, matplotlib.pyplot as plt, os

@@ -1,3 +1,5 @@
+from matplotlib.pylab import True_
+
 from src.ferry.aurora import AuroraFerry, AuroraFerryParameters
 from src.rl.ppo_controller import PPOTrajTrackingController
 from src.rl.sac_controller import SACTrajTrackingController
@@ -37,11 +39,9 @@ AURORA_AF_HELSINGBORG_MMSI = 265041000
 SEED = 42
 
 # TODO: Find the best way to check collision with target ships
-# TODO: Automate scenario generation from both sides of the crossing (how can I make it consistent with the other ferry ?)
-# TODO: SHOULD WE LIMIT THE DETECTION ANGLE OF THE CAMERA (FOV) ?
-# TODO: add np.random in Camera + reset()
 # TODO: forward uncertainty from kalman filter pose estimation to timespace colav ?
-# TODO: Should we assume camera is capable of estimating heading ? otherwise it's almost impossible to rely only on camera
+# TODO: Implement realistic matching between camera data and already existing targets
+# TODO: Solve distance to target error (discrete jumps)
 
 aurora = AuroraFerry(
     dt,
@@ -148,4 +148,16 @@ current = Current(
 
 env = NavEnv(aurora, [], [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in helsingborg.polygons], dt, wind=wind, current=current)
 sim = Simulator(env, dt=dt, skip_frames=10, render_mode='human', window_size=(6000, 2000), verbose=7)
-sim.run(duration, render=True, store_data=False, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=1.0, illumination=1.0, t0=time_window[0])
+sim.run(duration, render=True, store_data=True, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=1.0, illumination=1.0, t0=time_window[0])
+
+import matplotlib.pyplot as plt
+        
+fig1 = sim.plot_gnc_data_multi([
+    'guidance.eta_des[0]',
+    'vessel.eta[0]',
+    'navigation.eta[0]',
+    ], x_path=['guidance.eta_des[1]', 'vessel.eta[1]', 'navigation.eta[1]'])
+
+fig1.axes[0].set_aspect('equal')
+
+plt.show(block=True)

@@ -39,7 +39,7 @@ def load_ais_csv(filename):
     return pd.read_csv(filename)
 
 
-def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None, remove_stationary=True, min_speed=0.5) -> pd.DataFrame:
+def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ships=[], remove_stationary=True, min_speed=0.5) -> pd.DataFrame:
     """
     Interpolate AIS data to regular time intervals with optional smoothing.
     
@@ -48,7 +48,7 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None, 
     - dt: time interval in seconds for interpolation
     - smooth: apply Gaussian smoothing to interpolated data
     - sigma: standard deviation for Gaussian smoothing (higher = smoother)
-    - exclude_ship: MMSI number or ship name to exclude from interpolation
+    - exclude_ships: list of MMSI integers to exclude from interpolation
     - remove_stationary: remove vessels that are not moving (in port)
     - min_speed: minimum speed in knots to consider vessel as moving
     
@@ -61,13 +61,8 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ship=None, 
     df = df.dropna(subset=['timestamp_sec'])
     
     # Exclude specified ship if requested
-    if exclude_ship is not None:
-        # Check if exclude_ship matches MMSI or name
-        mmsi_mask = df['mmsi'] != exclude_ship
-        name_mask = True
-        if 'name' in df.columns:
-            name_mask = df['name'] != exclude_ship
-        df = df[mmsi_mask & name_mask]
+    if exclude_ships:
+        df = df[~df['mmsi'].isin(exclude_ships)]
     
     # Remove stationary vessels (assumed to be in port)
     if remove_stationary:
@@ -225,7 +220,7 @@ if __name__ == "__main__":
 
     for f in files:
         df = load_ais_csv(f)
-        df_smooth_interp = interpolate_ais_data(df, dt=1.0, smooth=True, sigma=10.0, exclude_ship=265041000, remove_stationary=True)
+        df_smooth_interp = interpolate_ais_data(df, dt=1.0, smooth=True, sigma=10.0, exclude_ships=[265041000], remove_stationary=False)
         df_smooth_interp.to_csv(os.path.join('data', 'smooth_interp', os.path.basename(f)))
         print(f"Processed {os.path.basename(f)}")
 
@@ -237,7 +232,7 @@ if __name__ == "__main__":
     # print(loaded_df.head())
 
     # # Test interpolation with smoothing
-    # interpolated_df_smooth = interpolate_ais_data(loaded_df, dt=1.0, smooth=True, sigma=10.0, exclude_ship=265041000)
+    # interpolated_df_smooth = interpolate_ais_data(loaded_df, dt=1.0, smooth=True, sigma=10.0, exclude_ships=[265041000])
     # print("Interpolated AIS data with smoothing (1 second intervals):")
     # print(interpolated_df_smooth.head())
 

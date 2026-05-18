@@ -1,107 +1,52 @@
-# Aurora Ferry - Maritime Navigation and Simulation System
-
-A comprehensive maritime simulation and navigation system for autonomous ferry operations, featuring AIS data processing, real-time vessel tracking, and advanced navigation algorithms.
-
-## Features
-
-- **AIS Data Processing**: Parse and visualize Automatic Identification System data
-- **Interactive Mapping**: Real-time vessel visualization with Helsingborg ferry routes
-- **Target Tracking**: Kalman filter-based vessel tracking and prediction  
-- **Navigation System**: Advanced navigation with obstacle avoidance
-- **Ferry Simulation**: Complete Aurora ferry dynamics simulation
+# Aurora Ferry - Timespace and RL for collision avoidance
 
 ## Installation
-
-### Method 1: Install from PyPI (Recommended)
-```bash
-pip install aurora-ferry
-```
-
-### Method 2: Development Installation
-
 1. **Clone with submodules:**
 ```bash
 git clone --recurse-submodules https://github.com/stiefen1/aurora_ferry.git
 cd aurora_ferry
 ```
 
-2. **Create conda environment:**
+2. **Install the PythonVehicleSimulator submodule:**
 ```bash
-conda env create -f env.yml
-conda activate aurora-ferry
+cd ./submodules/PythonVehicleSimulator/
+git switch rk4-model-aurora-ferry
+pip install -e .
+cd ../..
 ```
 
-3. **Install the package in development mode:**
+3. **Install the Timespace-COLAV submodule:**
+```bash
+pip install -e ./submodules/timespace-colav/
+```
+
+4. **Install the package in development mode:**
 ```bash
 pip install -e .
 ```
 
-4. **Install the PythonVehicleSimulator submodule:**
-```bash
-pip install -e ./submodules/PythonVehicleSimulator/
-```
-
 ## Quick Start
 
-```python
-from aurora_ferry import AIS, HelsingborgMap, NavigationAurora
+### Setup configuration file
+Go to ```src/scenarios``` and open ```test.yaml```, which is an example configuration file for simulations generation. You can copy this file to a new folder and edit the configuration based on your own requirements. 
 
-# Load AIS data and map
-ais = AIS('data/AIS.csv')
-map_env = HelsingborgMap()
+### Setup AIS data
+Create a folder ```data/raw``` in the root folder and place all the AIS data available inside this folder. Make sure that you specify the path to each .csv file in your configuration file (field scenario_generation->ais_data_paths).
 
-# Create navigation system
-nav = NavigationAurora(
-    eta=np.array([0, 0, 0, 0, 0, 0]),
-    nu=np.array([0, 0, 0, 0, 0, 0]),
-    dt=0.1
-)
-```
+### Setup RL weights
+Place the NN weights of the RL agent inside a folder and provide the path to this folder inside your configuration file (field scenario_generation->control->path_to_weights). You must also specify which algorithm ('sac' or 'ppo') the RL agent is based on (field scenario_generation->control->algorithm). 
 
-## Usage Examples
+### Launch simulations
+The main.py file (root folder) allows to launch the simulations as described in your configuration file. For this purpose, edit the ```FOLDER``` and ```CONFIG_FILENAME``` to match the path to your configuration file. 
 
-### Interactive AIS Visualization
-```bash
-python test/interactive_map_with_ais.py
-```
+For example, if your configuration file is named "config1.yaml" and placed in /sim/tests, then ```FOLDER="sim/tests"``` AND ```CONFIG_FILENAME=config1.yaml```.
 
-### Run Ferry Control Test
-```bash
-python test/revolt_control.py
-```
+### Results
+Figures and a short report will be generated in the same folder as your configuration file. 
 
-## Testing
-
-Run the revolt_control.py to verify installation was successful:
-```bash
-python test/revolt_control.py
-```
-
-A new gif should be generated in the `videos/` folder.
-
-## Development
-
-### Optional Dependencies
-
-Install development dependencies:
-```bash
-pip install -e ".[dev]"
-```
-
-Install Jupyter dependencies for notebooks:
-```bash
-pip install -e ".[jupyter]"
-```
-
-### Running Tests
-```bash
-pytest
-```
-
-### Code Formatting
-```bash
-black src/ test/
-```
+### Weather Forecasts
+- [DMI](https://www.dmi.dk/)
+- [FCOO](https://app.fcoo.dk/ifm-maps/denmark/)
 
 ## License
 
@@ -119,3 +64,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
