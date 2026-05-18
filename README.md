@@ -5,6 +5,7 @@
 ```bash
 git clone --recurse-submodules https://github.com/stiefen1/aurora_ferry.git
 cd aurora_ferry
+git switch rl-only
 ```
 
 2. **Install the PythonVehicleSimulator submodule:**
