@@ -58,7 +58,7 @@ class SimAnalyzer:
         run_summaries: List[Dict] = []
 
         print("Analyzing results..")
-        for config, sim in tqdm(zip(self.config, self.sim), total=len(self.config)):
+        for i, (config, sim) in enumerate(tqdm(zip(self.config, self.sim), total=len(self.config))):
             scenario_generation = config["scenario_generation"]
             simulation = scenario_generation["simulation"]
             t0 = pd.to_datetime(simulation["start_time_iso_utc"])
@@ -179,7 +179,7 @@ class SimAnalyzer:
                 failure_causes.append("target not reached")
 
             run_summaries.append({
-                "json_file": os.path.basename(self.path_to_json[len(run_summaries)]) if len(run_summaries) < len(self.path_to_json) else f"run_{len(run_summaries)}.json",
+                "json_file": os.path.basename(self.path_to_json[i]),
                 "success": mission_success,
                 "failure_causes": failure_causes,
                 "ts_collisions": ts_collision_events,

@@ -224,8 +224,6 @@ class ODMGenerator:
 
         simulation_cfg["start_time_iso_utc"] = start_iso
 
-        print(t_min, t_max, start_sec, start_iso, duration_sec, csv_path)
-
         return start_sec, duration_sec
 
     def _resolve_failure_times(self, node: Any, start_sec: float, duration_sec: float) -> None:
