@@ -76,6 +76,9 @@ For example, if your configuration file is named "config1.yaml" and placed in /s
 ### Results
 Figures and a short report will be generated in the same folder as your configuration file. 
 
+## Replay Simulations
+If you want to visualize a specific scenario, the ```src/scenarios/sim_launcher.py``` file can be used. In the ```__main__``` section, change the path provided to ```launcher.run_single_sim``` to the desired scenario (.json) and run the file. A matplotlib window should open to show the resulting simulation.
+
 ### Weather Forecasts
 - [DMI](https://www.dmi.dk/)
 - [FCOO](https://app.fcoo.dk/ifm-maps/denmark/)
