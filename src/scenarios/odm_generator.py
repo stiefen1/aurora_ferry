@@ -274,7 +274,7 @@ class ODMGenerator:
         
 
 if __name__ == "__main__":
-    odm_gen = ODMGenerator(DEFAULT_PATH_TO_CONFIG, seed=None)
+    odm_gen = ODMGenerator(DEFAULT_PATH_TO_CONFIG)
     odm_gen()
 
     # config.yaml
