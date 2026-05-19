@@ -1,11 +1,11 @@
 # Aurora Ferry - Timespace and RL for collision avoidance
+Developed and tested on Windows using python 3.14.0 within a conda environment.
 
 ## Installation
-1. **Clone with submodules and switch to ```rl-only``` branch:**
+1. **Clone with submodules:**
 ```bash
 git clone --recurse-submodules https://github.com/stiefen1/aurora_ferry.git
 cd aurora_ferry
-git switch rl-only
 ```
 
 2. **Install branch ```rk4-model-aurora-ferry``` of the PythonVehicleSimulator submodule:**
