@@ -1,14 +1,14 @@
 # Aurora Ferry - Timespace and RL for collision avoidance
 
 ## Installation
-1. **Clone with submodules:**
+1. **Clone with submodules and switch to ```rl-only``` branch:**
 ```bash
 git clone --recurse-submodules https://github.com/stiefen1/aurora_ferry.git
 cd aurora_ferry
 git switch rl-only
 ```
 
-2. **Install the PythonVehicleSimulator submodule:**
+2. **Install branch ```rk4-model-aurora-ferry``` of the PythonVehicleSimulator submodule:**
 ```bash
 cd ./submodules/PythonVehicleSimulator/
 git switch rk4-model-aurora-ferry
