@@ -150,7 +150,7 @@ class SimLauncher:
         
         env = NavEnv(aurora, [], [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in self.map.polygons], dt, wind=wind, current=current)
         sim = Simulator(env, dt=dt, skip_frames=10, render_mode='human', window_size=(6000, 2000), verbose=7)
-        sim.run(duration, render=render, store_data=True, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=odm["visibility"], illumination=odm["illumination"], t0=time_window[0])
+        sim.run(duration, render=render, store_data=True, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=odm["visibility"], illumination=odm["illumination"], t0=time_window[0], seed=seed)
 
         """
         Data to save
@@ -243,4 +243,4 @@ class SimLauncher:
 if __name__ == "__main__":
     import os
     launcher = SimLauncher()
-    launcher.run_single_sim(os.path.join("sim_data", "test", "scenarios", "test_0.json"), render=True)
+    launcher.run_single_sim(os.path.join("sim_data", "test", "scenarios", "test_26.json"), render=True)
