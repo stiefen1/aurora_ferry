@@ -3,4 +3,4 @@
 	url = https://github.com/stiefen1/PythonVehicleSimulator.git
 [submodule "submodules/timespace-colav"]
 	path = submodules/timespace-colav
-	url = git@github.com:stiefen1/timespace-colav.git
+	url = https://github.com/stiefen1/timespace-colav.git
