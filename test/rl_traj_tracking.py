@@ -38,10 +38,10 @@ n_cars = 200 # 0-240
 AURORA_AF_HELSINGBORG_MMSI = 265041000
 SEED = 42
 
-# TODO: Find the best way to check collision with target ships
 # TODO: forward uncertainty from kalman filter pose estimation to timespace colav ?
 # TODO: Implement realistic matching between camera data and already existing targets
-# TODO: Solve distance to target error (discrete jumps)
+# TODO: Make RL training compliant with the new config.yaml file format
+# TODO: Improve traj tracking accuracy, e.g. by changing the reward to e^{-l1*x} * (1 + e^{-l2*y} * (1 + e^{-l3*z} * (1 + ...)))
 
 aurora = AuroraFerry(
     dt,
