@@ -49,7 +49,24 @@ Go to ```src/scenarios``` and open ```test.yaml```, which is an example configur
 Create a folder ```data/raw``` in the root folder and place all the AIS data available inside this folder. Make sure that you specify the path to each .csv file in your configuration file (field scenario_generation->ais_data_paths).
 
 ### Setup RL weights
-Place the NN weights of the RL agent inside a folder and provide the path to this folder inside your configuration file (field scenario_generation->control->path_to_weights). You must also specify which algorithm ('sac' or 'ppo') the RL agent is based on (field scenario_generation->control->algorithm). 
+Place the NN weights of the RL agent and the observation space range inside a folder and provide the path to this folder inside your configuration file (field scenario_generation->control->path_to_weights). You must also specify which algorithm ('sac' or 'ppo') the RL agent is based on (field scenario_generation->control->algorithm). 
+
+At this point, your folder structure should look similar to
+```
++---data
+|   |   ferry_data.json
+|   |
+|   +---raw
+|   |       2023_04_06.csv
+|   |       2023_04_15.csv
+|
++---models
+|   \---sac
+|       \---2026_05_07_09_24_00
+|               aurora.zip
+|               observation_space_ranges.json
+```
+Alternative configurations are possible as long as you specify it correctly in the configuration file.
 
 ### Launch simulations
 The ```main.py``` file (root folder) allows to launch the simulations as described in your configuration file. For this purpose, edit the ```FOLDER``` and ```CONFIG_FILENAME``` values in ```main.py``` to match the path to your configuration file. 
