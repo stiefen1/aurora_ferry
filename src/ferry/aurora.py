@@ -102,8 +102,10 @@ class AuroraFerryParameters:
     n_cars: int = 0                                     # Max number of cars is 240 -> m = 280'000
     passenger_mean_mass: float = 78.0
     passenger_dmass: float = 0.0                        # Additional average mass due to uncertainties
+    passenger_actual_mass: Optional[float] = None
     car_mean_mass: float = 1200
     car_dmass: float = 0.0                              # Additional average mass due to uncertainties
+    car_actual_mass: Optional[float] = None
     
 
     Nx: int = 3
@@ -132,6 +134,11 @@ class AuroraFerryParameters:
     ubx: np.ndarray = field(default_factory=lambda: np.array([INF, INF, pi, knot_to_m_per_sec(14.9), 3, pi/6]))
 
     def __post_init__(self):
+        if self.car_actual_mass is not None:
+            self.car_dmass = self.car_actual_mass - self.car_mean_mass
+        if self.passenger_actual_mass is not None:
+            self.passenger_dmass = self.passenger_actual_mass - self.passenger_mean_mass
+        
         self.mp: float = self.n_passengers * (self.passenger_mean_mass + self.passenger_dmass) + self.n_cars * (self.car_mean_mass + self.car_dmass)       # Payload mass (kg) -> passengers and cars lead to ~+-10% inertia variation
         self.mp_estimated: float = self.n_passengers * self.passenger_mean_mass + self.n_cars * self.car_mean_mass
         self.volume:float = (self.m+self.mp) / RHO                         # m^3 volume 
@@ -255,6 +262,8 @@ class AuroraFerry(IVessel):
             n_cars: int = 0,
             passenger_dmass: float = 0.0,
             car_dmass: float = 0.0,
+            passenger_actual_mass: Optional[float] = None,
+            car_actual_mass: Optional[float] = None
     ):
         """
         Aurora autonomous ferry with 3DOF dynamics.
@@ -270,7 +279,7 @@ class AuroraFerry(IVessel):
         verbose_level:  Verbosity level for logging
         """
 
-        self.vessel_params = AuroraFerryParameters(m=mass, n_passengers=n_passengers, n_cars=n_cars, passenger_dmass=passenger_dmass, car_dmass=car_dmass)
+        self.vessel_params = AuroraFerryParameters(m=mass, n_passengers=n_passengers, n_cars=n_cars, passenger_dmass=passenger_dmass, car_dmass=car_dmass, passenger_actual_mass=passenger_actual_mass, car_actual_mass=car_actual_mass)
         self.actuator_params = AuroraFerryActuatorsParameters()
 
         super().__init__(

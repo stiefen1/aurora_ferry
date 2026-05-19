@@ -48,6 +48,8 @@ class SimLauncher:
         control = scenario_generation["control"]
         n_passengers = odm["ferry"]["passengers"]["number"]
         n_cars = odm["ferry"]["cars"]["number"]
+        passenger_actual_mass=odm["ferry"]["passengers"]["mass"]
+        car_actual_mass=odm["ferry"]["cars"]["mass"]
         mmsi_to_exclude = scenario_generation["mmsi_to_exclude"]
         time_window = (t0, t0 + timedelta(seconds=duration))
         wind_params, current_params = odm["wind"], odm["current"]
@@ -120,7 +122,8 @@ class SimLauncher:
             ),
             n_cars=n_cars,
             n_passengers=n_passengers,
-            
+            car_actual_mass=car_actual_mass,
+            passenger_actual_mass=passenger_actual_mass
         )
 
         wind = Wind(
