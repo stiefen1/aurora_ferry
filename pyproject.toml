@@ -38,6 +38,8 @@ dependencies = [
     "requests>=2.25.0",
     "casadi>=3.5.0",
     "scipy>=1.7.0",
+    "PyYAML>=6.0.3",
+    "stable_baselines3>=2.8.0"
 ]
 
 [project.optional-dependencies]
