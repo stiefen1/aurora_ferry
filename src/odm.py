@@ -1,10 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Tuple, Dict, Optional
-import numpy as np, json
-import os
+import numpy as np, yaml, os, json
 from pathlib import Path
 
-DEFAULT_ODM_JSON = 'odm_training.json'
+DEFAULT_ODM_YAML = 'odm_training.yaml'
 
 @dataclass  
 class ODM:
@@ -16,14 +15,33 @@ class ODM:
 
     def __post_init__(self):
         """Load ODM parameters after initialization"""
-        if self.src is not None:
+        if self.src is None:
+            self.src = str(Path(__file__).parent / DEFAULT_ODM_YAML)
+        
+        if Path(self.src).exists():
             # Load from specified path
-            self.from_json(self.src)
-        else:
-            # Load from default path
-            default_path = Path(__file__).parent / DEFAULT_ODM_JSON
-            if default_path.exists():
-                self.from_json(str(default_path))
+            match self.src.split('.')[-1]:
+                case "json":
+                    self.from_json(self.src)
+                case "yaml":
+                    self.from_yaml(self.src)
+                case _:
+                    raise ValueError(f"src must have the .yaml or .json extension, got {self.src}")
+
+    def from_yaml(self, src: str) -> None:
+        """Load ODM parameters from YAML file"""
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"ODM YAML file not found: {src}")
+        
+        with open(src, 'r') as f:
+            data = yaml.safe_load(f)["scenario_generation"]
+            
+        
+        # Map JSON keys to dataclass attributes and convert to numpy arrays
+        self.ferry = self._convert_from_numpy(data["operational_domain"].get('ferry', {})) # type:ignore
+        self.wind = self._convert_to_numpy(data["operational_domain"].get('wind', {})) # type:ignore
+        self.current = self._convert_to_numpy(data["operational_domain"].get('current', {})) # type:ignore
+        self.sensors = self._convert_to_numpy(data.get('sensors', {})) # type:ignore
 
     def from_json(self, src: str) -> None:
         """Load ODM parameters from JSON file"""
@@ -44,7 +62,10 @@ class ODM:
         if isinstance(obj, dict):
             return {key: self._convert_to_numpy(value) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return np.array(obj)
+            try:
+                return np.array(obj, dtype=np.float64)
+            except (ValueError, TypeError):
+                return np.array(obj)
         elif isinstance(obj, (int, float)):
             return np.array(obj)
         else:
@@ -87,7 +108,7 @@ class ODM:
     @property
     def sensor_noise_covariance(self) -> Optional[Dict]:
         """Access sensor noise covariance from sensors dict"""
-        return self.sensors.get('noise-covariance') if self.sensors else None
+        return self.sensors["states"].get('noise_covariance') if self.sensors else None
     
     @property 
     def camera_params(self) -> Optional[Dict]:
@@ -113,61 +134,3 @@ if __name__ == "__main__":
     print(f"  - Camera parameters: {odm_default.camera_params}")
     print()
     
-    # Example 2: Load ODM from specific file path
-    print("Loading ODM from specific file...")
-    try:
-        odm_custom = ODM(src=os.path.join("src", "odm_training.json"))
-        print(f"Wind range: {odm_custom.wind}")
-        print(f"Current range: {odm_custom.current}")
-        print()
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-    
-    # Example 3: Create empty ODM and load later
-    print("Creating empty ODM and loading later...")
-    odm_empty = ODM(src=None)  # Explicitly pass None to skip auto-loading
-    print(f"Empty ODM wind: {odm_empty.wind}")
-    
-    # Load manually
-    try:
-        odm_empty.from_json(os.path.join("src", "odm_training.json"))
-        print(f"After manual loading - wind: {odm_empty.wind}")
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-    
-    # Example 4: Save ODM to a new JSON file
-    print("\nSaving ODM to a new file...")
-    try:
-        # Create a modified copy
-        odm_save = ODM()
-        if odm_save.wind:
-            # Modify some parameters for demonstration (will be saved as numpy arrays)
-            odm_save.wind = {
-                "angle": {
-                    "min": np.array(-2.5),
-                    "max": np.array(2.5)
-                },
-                "speed": {
-                    "min": np.array(0),
-                    "max": np.array(15)
-                }
-            }
-        
-        # Save to new file
-        output_file = os.path.join("src", "test_odm_output.json")
-        odm_save.to_json(output_file)
-        print(f"ODM saved to {output_file}")
-        
-        # Verify by loading it back
-        odm_verify = ODM(src=output_file)
-        print(f"Verified - loaded wind parameters: {odm_verify.wind}")
-        print(f"  - Wind angle range: {odm_verify.wind['angle'] if odm_verify.wind else None}")
-        print(f"    - Types: min={type(odm_verify.wind['angle']['min'])}, max={type(odm_verify.wind['angle']['max'])}")
-        print(f"  - Wind speed range: {odm_verify.wind['speed'] if odm_verify.wind else None}")
-        
-        # Clean up
-        os.remove(output_file)
-        print("Test file cleaned up")
-        
-    except Exception as e:
-        print(f"Error during save/load test: {e}")

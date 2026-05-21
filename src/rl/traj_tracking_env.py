@@ -1,5 +1,5 @@
 import gymnasium as gym, numpy as np, numpy.typing as npt, sys, os
-from typing import Dict, Optional, Tuple, List, Literal
+from typing import Dict, LiteralString, Optional, Tuple, List, Literal
 from python_vehicle_simulator.vehicles.vessel import IVessel
 from python_vehicle_simulator.lib.obstacle import Obstacle
 from python_vehicle_simulator.lib.weather import Wind, Current
@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from src.odm import ODM
 from src.ferry.navigation import NavigationAurora
+
+from src.scenarios.generator import ScenarioGenerator
 
 
 """
@@ -32,10 +34,13 @@ IMPORTANT NOTES:
 
 """
 
+DEFAULT_PATH_TO_CONFIG = os.path.join("src", "rl", "training.yaml")
+
+
 DEFAULT_CENTER_NE = (0, 0) # (6.212e6, 351900.0)
 
 DEFAULT_PATH_PARAMS = {
-    "d_tot": 10000, "max_turn_deg": 45, "seg_len_range":(500, 1000), "start":DEFAULT_CENTER_NE, "N":1
+    "d_tot": 10000, "max_turn_deg": 60, "seg_len_range":(200, 1000), "start":DEFAULT_CENTER_NE, "N":1
 }
 
 class TrajTrackingEnv(gym.Env):
@@ -53,9 +58,9 @@ class TrajTrackingEnv(gym.Env):
             n_wpts: int = 2,
             wpts_space_multiplicator: int = 25,
             initial_angle_range: Tuple[float, float] = (-180, 180),
-            odm: Optional[ODM] = None,
             action_repeat: int = 10,
             path_to_obs_ranges: Optional[str] = None,
+            path_to_config: LiteralString = DEFAULT_PATH_TO_CONFIG,
     ):
         """
         Gymnasium navigation environment for vessel control.
@@ -76,13 +81,14 @@ class TrajTrackingEnv(gym.Env):
         self.n_wpts = n_wpts
         self.wpts_space_multiplicator = wpts_space_multiplicator
         self.initial_angle_range = initial_angle_range
-        self.odm = odm or ODM()
+        self.odm = ODM(src=path_to_config)
+
 
         self.wind_speed_range = self.odm.wind["speed"] # range for observations -> fine even though actual wind will sometimes gets out of the range
         self.wind_angle_range = self.odm.wind["angle"]
         self.current_speed_range = self.odm.current["speed"]
         self.current_angle_range = self.odm.current["angle"]
-        self.V_range = tuple(self.odm.ferry["target-speed"].values())
+        self.V_range = tuple(self.odm.ferry["target_speed"].values())
 
         self.init_action_space()
         self.init_observation_space(path_to_ranges=path_to_obs_ranges)
@@ -114,31 +120,30 @@ class TrajTrackingEnv(gym.Env):
         super().reset(seed=seed, options=options)
         self.np_random, _ = gym.utils.seeding.np_random(seed) # type: ignore
 
+        # Sample scenario
+        scenario_generator = ScenarioGenerator(path_to_config=self.odm.src) # type: ignore
+        scenario_generator.reset(seed=seed)
+        scenario = scenario_generator.sample_single(save=False)["scenario_generation"]
+        n_passengers = scenario["operational_domain"]["ferry"]["passengers"]["number"]
+        n_cars = scenario["operational_domain"]["ferry"]["cars"]["number"]
+        passenger_actual_mass = scenario["operational_domain"]["ferry"]["passengers"]["mass"]
+        car_actual_mass = scenario["operational_domain"]["ferry"]["cars"]["mass"]
+        ferry_mass = scenario["operational_domain"]["ferry"]["mass"]
+        current_params = scenario["operational_domain"]["current"]
+        wind_params = scenario["operational_domain"]["wind"]
+        dt = scenario["simulation"]["dt"]
+
         # Reset own vessel
-        ### MASS 
-        n_passengers = int(self.np_random.uniform(self.odm.ferry["passengers"]["number"]["min"], self.odm.ferry["passengers"]["number"]["max"]))
-        n_cars = int(self.np_random.uniform(self.odm.ferry["cars"]["number"]["min"], self.odm.ferry["cars"]["number"]["max"]))
-        # dmass are computed such that average mass stays within the min-max values defined in the ODM
-        passenger_dmass = np.clip(
-            self.np_random.normal(self.odm.ferry["passengers"]["mass"]["mean"], self.odm.ferry["passengers"]["mass"]["std"]),
-            self.odm.ferry["passengers"]["mass"]["min"],
-            self.odm.ferry["passengers"]["mass"]["max"]
-        ) - self.odm.ferry["passengers"]["mass"]["mean"]
-        car_dmass = np.clip(
-            self.np_random.normal(self.odm.ferry["cars"]["mass"]["mean"], self.odm.ferry["cars"]["mass"]["std"]),
-            self.odm.ferry["cars"]["mass"]["min"],
-            self.odm.ferry["cars"]["mass"]["max"]
-        ) - self.odm.ferry["cars"]["mass"]["mean"]
-        self.own_vessel = AuroraFerry(self.dt, mass=self.odm.ferry["mass"], n_passengers=n_passengers, n_cars=n_cars, passenger_dmass=passenger_dmass, car_dmass=car_dmass)
+        self.own_vessel = AuroraFerry(self.dt, mass=ferry_mass, n_passengers=n_passengers, n_cars=n_cars, passenger_actual_mass=passenger_actual_mass, car_actual_mass=car_actual_mass)
 
         # print(f"{self.own_vessel.vessel_params.m_tot_estimated:.1f} in [{self.total_mass_range["min"]:.1f}; {self.total_mass_range["max"]:.1f}] ?")
         # 351900.0, 6.212e6
         # self.map_bounds
-        x_init_min = np.array([-300+DEFAULT_CENTER_NE[0], -300+DEFAULT_CENTER_NE[1], 0, 0, 0, -np.pi, 
+        x_init_min = np.array([-100+DEFAULT_CENTER_NE[0], -100+DEFAULT_CENTER_NE[1], 0, 0, 0, -np.pi, 
                                -self.V_range[1], -self.V_range[1]/10, 0, 0, 0, -0.1,
                                *self.azimuth_angles_range["min"],
                                *self.thruster_speeds_range["min"]])
-        x_init_max = np.array([300+DEFAULT_CENTER_NE[0], 300+DEFAULT_CENTER_NE[1], 0, 0, 0, np.pi, 
+        x_init_max = np.array([100+DEFAULT_CENTER_NE[0], 100+DEFAULT_CENTER_NE[1], 0, 0, 0, np.pi, 
                                self.V_range[1], self.V_range[1]/10, 0, 0, 0, 0.1,
                                *self.azimuth_angles_range["max"],
                                *self.thruster_speeds_range["max"]])
@@ -146,7 +151,7 @@ class TrajTrackingEnv(gym.Env):
         self.own_vessel.reset(random=True, seed=seed, x_min=x_init_min, x_max=x_init_max)
         self.prev_states = self.own_vessel.states.copy()
 
-        R_se = np.diag(self.np_random.uniform(self.odm.sensors['states']['noise-covariance']["min"], self.odm.sensors['states']['noise-covariance']["max"]))
+        R_se = np.diag(scenario["sensors"]["states"]["noise_covariance"])
         self.own_vessel.navigation=NavigationAurora(
                                         self.own_vessel.states,
                                         dt=self.dt,
@@ -159,29 +164,31 @@ class TrajTrackingEnv(gym.Env):
             target_vessel.reset()
 
         # Sample a new target position within map bounds
-        self.path = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed)
-        self.sample_new_target_speed()
-        self.current_waypoint = 1
+        self.path = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed).smooth(200)
+        # self.sample_new_target_speed()
+        # self.current_waypoint = 1
+        self.V_des = scenario["operational_domain"]["ferry"]["target_speed"]
 
         # Sample wind current values
         self.wind = Wind(
-            self.np_random.uniform(self.wind_angle_range["min"], self.wind_angle_range["max"]),
-            self.np_random.uniform(self.wind_speed_range["min"], self.wind_speed_range["max"]),
-            attraction_beta=self.odm.wind["angle"]["ornstein-uhlenbeck"]["attraction"],
-            amplitude_beta=self.odm.wind["angle"]["ornstein-uhlenbeck"]["amplitude"],
-            attraction_norm=self.odm.wind["speed"]["ornstein-uhlenbeck"]["attraction"],
-            amplitude_norm=self.odm.wind["angle"]["ornstein-uhlenbeck"]["amplitude"],
-            dt=self.dt,
+            wind_params["angle"]["value"],
+            wind_params["speed"]["value"],
+            attraction_beta=wind_params["angle"]["ornstein_uhlenbeck"]["attraction"],
+            amplitude_beta=wind_params["angle"]["ornstein_uhlenbeck"]["amplitude"],
+            attraction_norm=wind_params["speed"]["ornstein_uhlenbeck"]["attraction"],
+            amplitude_norm=wind_params["angle"]["ornstein_uhlenbeck"]["amplitude"],
+            dt=dt,
             seed=seed
         )
+
         self.current = Current(
-            self.np_random.uniform(self.current_angle_range["min"], self.current_angle_range["max"]),
-            self.np_random.uniform(self.current_speed_range["min"], self.current_speed_range["max"]),
-            attraction_beta=self.odm.current["angle"]["ornstein-uhlenbeck"]["attraction"],
-            amplitude_beta=self.odm.current["angle"]["ornstein-uhlenbeck"]["amplitude"],
-            attraction_norm=self.odm.current["speed"]["ornstein-uhlenbeck"]["attraction"],
-            amplitude_norm=self.odm.current["angle"]["ornstein-uhlenbeck"]["amplitude"],
-            dt=self.dt,
+            current_params["angle"]["value"],
+            current_params["speed"]["value"],
+            attraction_beta=current_params["angle"]["ornstein_uhlenbeck"]["attraction"],
+            amplitude_beta=current_params["angle"]["ornstein_uhlenbeck"]["amplitude"],
+            attraction_norm=current_params["speed"]["ornstein_uhlenbeck"]["attraction"],
+            amplitude_norm=current_params["angle"]["ornstein_uhlenbeck"]["amplitude"],
+            dt=dt,
             seed=seed
         )
 
@@ -232,25 +239,25 @@ class TrajTrackingEnv(gym.Env):
         
         info = self._get_info()
 
-        if self.path.get_current_waypoint(*self.own_vessel.states[0:2]) > self.current_waypoint: # Update speed when we switch to next waypoint
-            self.sample_new_target_speed()
-            self.current_waypoint += 1
+        # if self.path.get_current_waypoint(*self.own_vessel.states[0:2]) > self.current_waypoint: # Update speed when we switch to next waypoint
+        #     # self.sample_new_target_speed()
+        #     self.current_waypoint += 1
 
         self.prev_states = self.own_vessel.states.copy()
 
         return observation, reward, terminated, truncated, info
 
-    def sample_new_target_speed(self) -> None:
-        self.V_des = float(
-            np.clip(
-                self.np_random.normal(
-                    np.mean(self.V_range), # mean = center of V_range
-                    (self.V_range[1]-self.V_range[0])/6 # standard deviation = range / 6
-                    ), 
-                self.V_range[0],
-                self.V_range[1]
-            )
-        )
+    # def sample_new_target_speed(self) -> None:
+    #     self.V_des = float(
+    #         np.clip(
+    #             self.np_random.normal(
+    #                 np.mean(self.V_range), # mean = center of V_range
+    #                 (self.V_range[1]-self.V_range[0])/6 # standard deviation = range / 6
+    #                 ), 
+    #             self.V_range[0],
+    #             self.V_range[1]
+    #         )
+    #     )
 
     def reward(self) -> float:
         """
@@ -259,12 +266,23 @@ class TrajTrackingEnv(gym.Env):
         Returns:
             float: Reward value (higher is better)
         """
-        return (
-            1 -
-            (self.dist_to_target()/1300) - # / 500
-            self.speed_error() / self.own_vessel.vessel_params.surge_speed_max -
-            self.weighted_power_consumption() / 5 # 25 # 50 # 100
-        )
+        d = self.dist_to_target()
+        se = self.speed_error()
+        p = self.weighted_power_consumption()
+        # print(d/200, se/self.own_vessel.vessel_params.surge_speed_max, 50*p)
+
+        return np.exp(-d/200) * (
+            1 + 2 * np.exp(-se / 3) * (
+                1 + 4 * np.exp(-50*p)
+                )
+            )
+    
+        # return (
+        #     1 -
+        #     (self.dist_to_target()/1300) - # / 500
+        #     self.speed_error() / self.own_vessel.vessel_params.surge_speed_max -
+        #     self.weighted_power_consumption() / 5 # 25 # 50 # 100
+        # )
     
     def speed_error(self) -> float:
         return np.abs(np.linalg.norm(self.own_vessel.states[6:8]).astype(float) - self.V_des)
@@ -678,14 +696,12 @@ def check_environment() -> None:
     """
     from gymnasium.utils.env_checker import check_env
     from python_vehicle_simulator.utils.unit_conversion import DEG2RAD
-    from src.odm import ODM
 
     dt = 0.2
     
     env = TrajTrackingEnv(
         dt,
         render_mode='human',
-        odm=ODM()
     )
 
     # This will catch many common issues
@@ -702,7 +718,7 @@ def check_environment() -> None:
     # Export ranges for controller (optional)
     env.export_observation_space_ranges_to("observation_space_ranges.json")
     
-    for step in range(env.max_steps):
+    for step in range(500):
         action = env.action_space.sample()  # Random action
         # action = np.array(8*[-1.])
         # action = np.array([0, 0, 0.0, 0.0, 1, -1, -1, -1])
@@ -714,7 +730,8 @@ def check_environment() -> None:
         
         if terminated or truncated:
             print(f"Episode ended at step {step}")
-            break
+            env.reset()
+            # break
     
     plt.show(block=True)  # Keep plot open
 

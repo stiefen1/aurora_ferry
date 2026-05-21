@@ -1,6 +1,6 @@
 import pathlib, os, glob
 from typing import List
-from src.scenarios.odm_generator import ODMGenerator
+from src.scenarios.generator import ScenarioGenerator
 from src.scenarios.sim_launcher import SimLauncher
 from src.scenarios.sim_analyzer import SimAnalyzer
 from src.utils.interpolate_ais import load_ais_csv, interpolate_ais_data
@@ -10,7 +10,7 @@ CONFIG_FILENAME = "test.yaml"
 PATH_TO_CONFIG = os.path.join(FOLDER, CONFIG_FILENAME)
 
 # Generate configuration files
-odm_gen = ODMGenerator(PATH_TO_CONFIG)
+odm_gen = ScenarioGenerator(PATH_TO_CONFIG)
 odm_gen() # Generate configuration files in same directory
 sim_config_files = glob.glob(os.path.join(os.path.dirname(PATH_TO_CONFIG), "scenarios", "*.json"))
 

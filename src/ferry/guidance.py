@@ -6,7 +6,7 @@ from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec
 from sympy import N
 from src.ais.ais import Vessel
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Literal, Optional
 import numpy as np, numpy.typing as npt
 
 from shapely import Geometry
@@ -38,6 +38,10 @@ class TimespaceGuidance(IGuidance):
             term_dist: float = 500.0,
             dchi: float = 1.0,
             du: float = 0.1,
+            delay: Optional[float] = None,
+            delay_type: Literal['symmetric', 'late', 'early', 'flat'] = 'symmetric',
+            corridor_width: float = 0.0,
+            simplify_corridor: float = 0.0,
             **kwargs
     ):
         self.global_path = global_path
@@ -51,6 +55,10 @@ class TimespaceGuidance(IGuidance):
         self.term_dist = term_dist
         self.dchi = dchi
         self.du = du
+        self.delay = delay
+        self.delay_type = delay_type
+        self.corridor_width = corridor_width
+        self.simplify_corridor = simplify_corridor
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> bool:
@@ -71,6 +79,7 @@ class TimespaceGuidance(IGuidance):
             ships_for_projection: List[MovingShip] = []
             for vessel in target_vessels:
                 if vessel.heading is not None and vessel.cog is not None and vessel.sog is not None:
+                    # ships_for_projection.append(MovingShip.from_csog((vessel.east, vessel.north), vessel.heading, vessel.cog, knot_to_m_per_sec(vessel.sog), vessel.length, vessel.width, degrees=True, mmsi=vessel.mmsi).buffer(self.buffer_target_ships).simplify(2))
                     ships_for_projection.append(MovingShip.from_csog((vessel.east, vessel.north), vessel.heading, vessel.cog, knot_to_m_per_sec(vessel.sog), vessel.length, vessel.width, degrees=True, mmsi=vessel.mmsi, dchi=self.dchi, du=self.du).buffer(self.buffer_target_ships, join_style='mitre'))
                 
             # distance_along_global_path = self.global_path.
@@ -83,10 +92,14 @@ class TimespaceGuidance(IGuidance):
                     heading=states[5],
                     degrees=False,
                     ts_in_TSS=True,
-                    good_seamanship=self.good_semanship
+                    good_seamanship=self.good_semanship,
+                    delay=self.delay,
+                    delay_type=self.delay_type, # type: ignore
+                    corridor_width=self.corridor_width,
+                    simplify_corridor=self.simplify_corridor
                 )
-            except:
-                print(f"Error while planning avoidance maneuver")
+            except Exception as e:
+                print(f"Error while planning avoidance maneuver: {e}")
                 traj = None
 
             if traj is not None: # valid trajectory was found
@@ -112,7 +125,8 @@ class TimespaceGuidance(IGuidance):
         
         if verbose >= 2:
             if self.traj is not None:
-                PWLPath(self.traj.xy, input_format='east-north').plot(ax=ax, verbose=verbose)
+                self.traj.plot(ax=ax, corridor='both')
+                # PWLPath(self.traj.xy, input_format='east-north').plot(ax=ax, verbose=verbose)
 
         if verbose >= 6:
             if 'projected_obstacles' in self.prev['info'].keys():  

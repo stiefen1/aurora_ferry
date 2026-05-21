@@ -2,7 +2,7 @@ scenario_generation:
   experiment_name: "aurora_ferry_test_scenario_batch"
   description: "Scenario sampling configuration based on odm_training.json"
   seed: 42
-  number_of_scenarios: 6
+  number_of_scenarios: 1000
 
   simulation:
     duration_sec: 800
@@ -18,18 +18,18 @@ scenario_generation:
     term_dist: 500.0
     dchi: 5.0
     du: 0.5
-    delay: 10
+    delay: 20
     delay_type: 'symmetric'
     corridor_width: 50
     simplify_corridor: 1
 
   navigation:
-    q_tt: [1, 1, 0.01, 0.0003]
+    q_tt: [0.1, 0.1, 0.001, 0.0003]
     r_ais: [10, 10, 0.04, 0.00122]
     r_camera: [0.00008, 640000]
 
   control:
-    path_to_weights: 'models/sac/2026_05_07_09_24_00'
+    path_to_weights: 'models/sac/2026_05_20_00_31_42'
     algorithm: 'sac'
 
   ais_data_paths:
@@ -88,7 +88,7 @@ scenario_generation:
         max: 3.14159
         ornstein_uhlenbeck:
           attraction: 0.01
-          amplitude: 0.05
+          amplitude: 0.01
       speed:
         min: 0.0
         max: 1.0

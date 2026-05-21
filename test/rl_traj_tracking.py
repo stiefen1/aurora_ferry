@@ -42,6 +42,7 @@ SEED = 42
 # TODO: Implement realistic matching between camera data and already existing targets
 # TODO: Make RL training compliant with the new config.yaml file format
 # TODO: Improve traj tracking accuracy, e.g. by changing the reward to e^{-l1*x} * (1 + e^{-l2*y} * (1 + e^{-l3*z} * (1 + ...)))
+# TODO: Increase thruster max force to ease trajectory tracking up to 7.5 m/s
 
 aurora = AuroraFerry(
     dt,

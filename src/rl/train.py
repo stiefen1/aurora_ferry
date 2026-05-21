@@ -18,7 +18,7 @@ name_prefix = "aurora"
 alg = "sac"
 
 
-dt = 0.5
+dt = 0.2
 env = TrajTrackingEnv(
     dt,
     n_wpts=2,

@@ -2,14 +2,15 @@
 Randomly sample an operational domain based on the admissible ranges provided in a yaml file and save it (json)
 """
 import pathlib
-from typing import LiteralString, Optional, Any
+from typing import Dict, LiteralString, Optional, Any
 
 import os, json, csv, hashlib, numpy as np, yaml
 from datetime import datetime, timezone
 
 DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "test", "test.yaml")
 
-class ODMGenerator:
+class ScenarioGenerator:
+    _seed: Optional[int] = None
     def __init__(
             self,
             path_to_config: LiteralString,
@@ -17,9 +18,20 @@ class ODMGenerator:
         self.path_to_config = path_to_config
         with open(self.path_to_config, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
-        self.seed = self.config["scenario_generation"]["seed"]
-        self.rng = np.random.default_rng(self.seed)
+
+        self.reset(seed=self.config["scenario_generation"]["seed"])
         
+    @property
+    def seed(self) -> int | None:
+        return self._seed
+    
+    @seed.setter
+    def seed(self, val: int | None) -> None:
+        self._seed = val
+        self.rng = np.random.default_rng(self._seed)
+
+    def reset(self, seed: Optional[int] = None) -> None:
+        self.seed = seed
 
     def __call__(self, folder: str = "scenarios"):
         for i in range(self.config["scenario_generation"]["number_of_scenarios"]):
@@ -239,7 +251,7 @@ class ODMGenerator:
         for value in node.values():
             self._resolve_failure_times(value, start_sec, duration_sec)
 
-    def sample_single(self, save_path: Optional[str] = None) -> None:
+    def sample_single(self, save_path: Optional[str] = None, save: bool = True) -> Dict:
         save_path = save_path or (self.path_to_config.rsplit(".", 1)[0] + ".json")
         scenario_generation = self.config.get("scenario_generation", self.config)
         sampled = self._sample_node(scenario_generation)
@@ -256,25 +268,23 @@ class ODMGenerator:
             "scenario_generation": sampled,
         }
 
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        if save:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
 
-        print(f"Saved sampled ODM scenario to {save_path}")
+            print(f"Saved sampled ODM scenario to {save_path}")
+        
+        return payload
 
     def _config_hash(self) -> str:
         with open(self.path_to_config, "rb") as f:
             digest = hashlib.sha256(f.read()).hexdigest()
         return digest[:8]
-
-    def reset(self, seed: Optional[int] = None) -> None:
-        if seed is not None:
-            self.seed = seed
-        self.rng = np.random.default_rng(self.seed)
         
 
 if __name__ == "__main__":
-    odm_gen = ODMGenerator(DEFAULT_PATH_TO_CONFIG)
+    odm_gen = ScenarioGenerator(DEFAULT_PATH_TO_CONFIG)
     odm_gen()
 
     # config.yaml
