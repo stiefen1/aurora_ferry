@@ -16,9 +16,12 @@ pip install -e .
 cd ../..
 ```
 
-3. **Install the Timespace-COLAV submodule:**
+3. **Install branch ```corridors``` of the Timespace-COLAV submodule:**
 ```bash
-pip install -e ./submodules/timespace-colav/
+cd ./submodules/timespace-colav
+git switch corridors
+pip install -e .
+cd ../..
 ```
 
 4. **Install the package in development mode:**
