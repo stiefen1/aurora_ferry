@@ -34,6 +34,7 @@ IMPORTANT NOTES:
 
 """
 
+# DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "test", "test.yaml")
 DEFAULT_PATH_TO_CONFIG = os.path.join("src", "rl", "training.yaml")
 
 
@@ -82,7 +83,6 @@ class TrajTrackingEnv(gym.Env):
         self.wpts_space_multiplicator = wpts_space_multiplicator
         self.initial_angle_range = initial_angle_range
         self.odm = ODM(src=path_to_config)
-
 
         self.wind_speed_range = self.odm.wind["speed"] # range for observations -> fine even though actual wind will sometimes gets out of the range
         self.wind_angle_range = self.odm.wind["angle"]
@@ -271,11 +271,14 @@ class TrajTrackingEnv(gym.Env):
         p = self.weighted_power_consumption()
         # print(d/200, se/self.own_vessel.vessel_params.surge_speed_max, 50*p)
 
-        return np.exp(-d/200) * (
-            1 + 2 * np.exp(-se / 3) * (
-                1 + 4 * np.exp(-50*p)
+        return np.exp(-d/100) * (
+            1 + np.exp(-se/2.0) * (
+                1 + np.exp(-100*p)
                 )
             )
+
+        # return np.exp(-d/100) + np.exp(-se/2.0) + np.exp(-100*p) # 1st try -> static
+        # return 2*np.exp(-d/100) + 2*np.exp(-se/2.0) + np.exp(-100*p) # 2nd try -> almost static
     
         # return (
         #     1 -
@@ -717,6 +720,8 @@ def check_environment() -> None:
     
     # Export ranges for controller (optional)
     env.export_observation_space_ranges_to("observation_space_ranges.json")
+
+    env.max_steps = 20
     
     for step in range(500):
         action = env.action_space.sample()  # Random action

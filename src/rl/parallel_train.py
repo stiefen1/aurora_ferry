@@ -17,7 +17,7 @@ alg = "sac"
 
 dt = 0.2
 N_WPTS = 2
-WPTS_SPACE_MULTIPLICATOR = 10
+WPTS_SPACE_MULTIPLICATOR = 7
 
 def make_env():
     env = TrajTrackingEnv(
@@ -29,7 +29,7 @@ def make_env():
 
 
 if __name__ == '__main__':
-    n_envs = 5
+    n_envs = 4
     vec_env = make_vec_env(make_env, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
             raise ValueError(f"Selected algorithm invalid")
         
     model.learn(
-        total_timesteps=2_000_000,
+        total_timesteps=3_000_000,
         tb_log_name=name_prefix,
         callback=checkpoint_callback
     )

@@ -10,13 +10,13 @@ scenario_generation:
 
   guidance: 
     update_every_sec: 30
-    lookahead_distance: 1000.0
+    lookahead_distance: 1500.0
     colregs: True
     good_seamanship: True
     abort_colregs_after_iter: 1
     buffer_target_ships: 100.0
     term_dist: 500.0
-    dchi: 5.0
+    dchi: 10.0
     du: 0.5
     delay: 20
     delay_type: 'symmetric'
@@ -29,7 +29,7 @@ scenario_generation:
     r_camera: [0.00008, 640000]
 
   control:
-    path_to_weights: 'models/sac/2026_05_20_00_31_42'
+    path_to_weights: 'models/sac/2026_05_21_16_15_29'
     algorithm: 'sac'
 
   ais_data_paths:
@@ -43,9 +43,9 @@ scenario_generation:
   operational_domain:
     ferry:
       target_speed:
-        min: 6.5
+        min: 5
         max: 7.5
-        mean: 7.0
+        mean: 6.5
         std: 1
       mass: 2250000
       passengers:
