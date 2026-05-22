@@ -24,7 +24,7 @@ class SingleAzimuthThrusterParameters:
     T_a: float = 20 # 20.0                                  # Azimuth angle time constant (s) -> Chosen by me
     k_pos: float = 20 # 200                                  # Positive Bollard, one propeller -> f_i = k_pos * n_i * |n_i| if n_i>0 else k_neg * n_i * |n_i|
     k_neg: float = 20                                        # Negative Bollard, one propeller (Division by two beuse there are two propellers, values are obtained with a Bollard pull)
-    f_max: float = 570_000 # 600_000 # 40_000 # 38_798                          # Max positive force, one propeller
+    f_max: float = 700_000 # 570_000 # 600_000 # 40_000 # 38_798                          # Max positive force, one propeller
     f_min: float = 0                                        # Max negative force, one propeller
     speed_max: float = sqrt(f_max/k_pos)                        # Max (positive) propeller speed
     speed_min: float = 0                                        # We don't allow negative thruster speed
