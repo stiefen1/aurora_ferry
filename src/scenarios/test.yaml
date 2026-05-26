@@ -29,7 +29,7 @@ scenario_generation:
     r_camera: [0.00008, 640000]
 
   control:
-    path_to_weights: 'models/sac/2026_05_07_09_24_00'
+    path_to_weights: 'models/sac/2026_05_22_15_10_57'
     algorithm: 'sac'
 
   ais_data_paths:

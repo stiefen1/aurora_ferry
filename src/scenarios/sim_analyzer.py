@@ -65,13 +65,8 @@ class SimAnalyzer:
             duration = simulation["duration_sec"]
             time_window = (t0, t0 + datetime.timedelta(seconds=duration))
 
-            match scenario_generation["start"]:
-                case "Helsingborg":
-                    color = 'green'
-                case "Helsingor":
-                    color = 'red'
-                case _:
-                    raise ValueError(f"Invalid start name <<{scenario_generation['start']}>>")
+            start_pos = np.array([scenario_generation["start"]["north"], scenario_generation["start"]["east"]])
+            color = 'red' if np.linalg.norm(start_pos - ferry_route.waypoints[0]) <= np.linalg.norm(start_pos - ferry_route.waypoints[-1]) else 'green'
 
             # Compute metrics for each simulation
             ## Distance to TS
@@ -396,15 +391,10 @@ class SimAnalyzer:
 
         return out
 
-    def target_reached(self, states: Dict, ferry_route: npt.NDArray, start: str, threshold: float) -> Tuple[bool, float, float]:
-        match start:
-            case "Helsingborg":
-                target = ferry_route[0]
-            case "Helsingor":
-                target = ferry_route[-1]
-            case _:
-                raise ValueError(f"Invalid start name <<{start}>>")
-            
+    def target_reached(self, states: Dict, ferry_route: npt.NDArray, start: Dict, threshold: float) -> Tuple[bool, float, float]:
+        w0, wN = ferry_route[0], ferry_route[-1]
+        start_ne = np.array([start["north"], start["east"]])
+        target = wN if np.linalg.norm(start_ne - w0) <= np.linalg.norm(start_ne - wN) else w0
         dist_to_target = np.linalg.norm(states["data"][:, 0:2] - target[None, :], axis=1)
         idx_min_dist_to_target = np.argmin(dist_to_target) 
         min_dist_to_target = float(dist_to_target[idx_min_dist_to_target])

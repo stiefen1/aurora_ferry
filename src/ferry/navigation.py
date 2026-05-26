@@ -98,12 +98,16 @@ class NavigationAurora(INavigation):
             ferry_params: AuroraFerryParameters = AuroraFerryParameters(),
             forget_target_after_sec: int = 60,
             distance_threshold_target_tracking: float = 2000,
+            ground_truth_target_ships: bool = False, # whether we can use ground truth target ships pose or not
+            ground_truth_update_every_sec: int = 1,
             **kwargs
     ):
         sensors = sensors if sensors is not None else {} # 'camera': Camera(), 'ais': AIS(path_to_ais)
         self.ferry_params = ferry_params
         self.forget_target_after_sec = forget_target_after_sec
         self.distance_threshold_target_tracking = distance_threshold_target_tracking
+        self.ground_truth_target_ships = ground_truth_target_ships        
+        self.ground_truth_update_every_sec = ground_truth_update_every_sec
 
         self.target_tracker_params = {
             'Q': np.diag(q_tt),
@@ -132,6 +136,7 @@ class NavigationAurora(INavigation):
         # update timing
         self.last_ais_update_time: Optional[datetime] = None
         self.last_camera_update_time: Optional[datetime] = None
+        self.last_ground_truth_update_time: Optional[datetime] = None
         
         super().__init__(states, sensors, *args, **kwargs)
         self.reset(states, seed=seed)
@@ -161,7 +166,7 @@ class NavigationAurora(INavigation):
         
         if should_update_ais:
             self.last_ais_update_time = target_time
-            vessels_ais: List[Vessel] = self.sensors['ais'].get_nearby_vessels(states[0], states[1], detection_radius_meters, target_time, time_tolerance=time_tolerance)
+            vessels_ais: List[Vessel] = self.sensors['ais'].get_nearby_vessels(states[0], states[1], detection_radius_meters, target_time, time_tolerance=time_tolerance) # type: ignore
             existing_mmsi = self.target_collection.keys()
             for vessel_ais in vessels_ais:
                 # Vessel is already being tracked
@@ -228,6 +233,44 @@ class NavigationAurora(INavigation):
 
         info = info | {'raw_vessels_camera': detected_vessels}
         return [tracked_target.vessel for tracked_target in self.target_collection.values()], info
+    
+    def update_nearby_vessels_from_ground_truth(self, states: npt.NDArray, target_time: datetime, time_tolerance: int = DEFAULT_TIME_TOLERANCE_SECONDS) -> Tuple[List[Vessel], Dict]:
+        # Get "measurements" from camera and update EKF estimation
+        # Only query Camera for new vessels every update_every_sec seconds
+        should_update_ground_truth = (
+            self.last_ground_truth_update_time is None or 
+            (target_time - self.last_ground_truth_update_time).total_seconds() >= self.ground_truth_update_every_sec
+        )
+        
+        info = {}
+        if should_update_ground_truth:
+            self.last_ground_truth_update_time = target_time
+            out = self.sensors['camera'](states, target_time, visibility=1, illumination=1, time_tolerance=time_tolerance)
+            detected_vessels: List[Vessel] = out[0]
+            info = out[1]
+            all_vessels_in_camera: List[Vessel] = info['all_vessels_in_camera']
+            for i, vessel in enumerate(all_vessels_in_camera):
+                # Vessel is already being tracked
+                measurement = np.array([vessel.north, vessel.east, knot_to_m_per_sec(vessel.sog), np.deg2rad(vessel.cog)]) # Target vessel pose estimation relies on our own state estimation
+                    
+                if vessel.mmsi in self.target_collection:
+                    tracked_target = self.target_collection[vessel.mmsi]
+                    tracked_target.vessel = deepcopy(vessel) # update vessel data
+
+                    # Update target states estimate
+                    tracked_target.update_from_ais(measurement, target_time)
+                # Create new tracker for new vessel
+                elif np.linalg.norm(states[0:2] - np.array([vessel.north, vessel.east])) <= self.distance_threshold_target_tracking:
+                    new_tracker = TargetTrackerSequentialEKF( # TargetTrackerSequentialCTRV(
+                        **deepcopy(self.target_tracker_params),
+                        x0=np.array([vessel.north, vessel.east, knot_to_m_per_sec(vessel.sog), np.deg2rad(vessel.cog)])
+                    )
+                    self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time)
+        else:
+            detected_vessels: List[Vessel] = []
+
+        info = info | {'raw_vessels_camera': detected_vessels}
+        return [tracked_target.vessel for tracked_target in self.target_collection.values()], info
 
     def measure_nearby_vessels(self, states: npt.NDArray, states_estimation: npt.NDArray, target_time: datetime, visibility: float, illumination: float, detection_radius_meters: float = DEFAULT_DETECTION_RADIUS_METERS, time_tolerance: int = DEFAULT_TIME_TOLERANCE_SECONDS) -> Tuple[List[Vessel], Dict]:
         # Update vessel that are already being tracked
@@ -236,13 +279,18 @@ class NavigationAurora(INavigation):
             tracked_target.predict(vessels_command)
 
         info = {}
-        if "ais" in self.sensors.keys():
-            _, ais_info = self.update_nearby_vessels_from_ais(states, target_time, detection_radius_meters=detection_radius_meters, time_tolerance=time_tolerance)
-            info = info | ais_info
+        if self.ground_truth_target_ships and "camera" in self.sensors.keys():
+            _, info = self.update_nearby_vessels_from_ground_truth(states, target_time, time_tolerance=time_tolerance)
 
-        if "camera" in self.sensors.keys():
-            _, camera_info = self.update_nearby_vessels_from_camera(states, states_estimation, target_time, visibility, illumination, time_tolerance=time_tolerance)
-            info = info | camera_info
+        else:
+            if "ais" in self.sensors.keys():
+                _, ais_info = self.update_nearby_vessels_from_ais(states, target_time, detection_radius_meters=detection_radius_meters, time_tolerance=time_tolerance)
+                info = info | ais_info
+
+            if "camera" in self.sensors.keys():
+                _, camera_info = self.update_nearby_vessels_from_camera(states, states_estimation, target_time, visibility, illumination, time_tolerance=time_tolerance)
+                info = info | camera_info
+    
 
         # Update vessel geometries
         for key in list(self.target_collection.keys()):
@@ -336,21 +384,22 @@ class NavigationAurora(INavigation):
             ax.arrow(x, y, dx, dy, head_width=2, head_length=3, fc='purple', ec='purple')
 
         if verbose >= 6:
-            if "ais" in self.sensors.keys():
-                for vessel in self.prev['info']['raw_vessels_ais']:
-                    if vessel.geometry is not None:
-                        e, n = vessel.east, vessel.north
-                        # print(target.vessel.geometry.shape) (3, 8)
-                        ax.plot(vessel.geometry[1, :], vessel.geometry[0, :], c='green')
-                        ax.text(e+100, n-100, f"new AIS data ({vessel.name})", c='green')
+            if not(self.ground_truth_target_ships):
+                if "ais" in self.sensors.keys():
+                    for vessel in self.prev['info']['raw_vessels_ais']:
+                        if vessel.geometry is not None:
+                            e, n = vessel.east, vessel.north
+                            # print(target.vessel.geometry.shape) (3, 8)
+                            ax.plot(vessel.geometry[1, :], vessel.geometry[0, :], c='green')
+                            ax.text(e+100, n-100, f"new AIS data ({vessel.name})", c='green')
 
-            if "camera" in self.sensors.keys():
-                x_os, y_os = eta[1], eta[0]
-                x_ts = x_os + self.prev['info']['noisy_rel_distances'] * np.sin(self.prev['info']['noisy_rel_angles'] + self.prev['eta'][5])
-                y_ts = y_os + self.prev['info']['noisy_rel_distances'] * np.cos(self.prev['info']['noisy_rel_angles'] + self.prev['eta'][5])
-                for x, y, v in zip(x_ts, y_ts, self.prev['info']['raw_vessels_camera']):
-                    ax.scatter(x, y, c='blue')
-                    ax.text(x+100, y-50, f"new camera data ({v.name})", c='blue')
+                if "camera" in self.sensors.keys():
+                    x_os, y_os = eta[1], eta[0]
+                    x_ts = x_os + self.prev['info']['noisy_rel_distances'] * np.sin(self.prev['info']['noisy_rel_angles'] + self.prev['eta'][5])
+                    y_ts = y_os + self.prev['info']['noisy_rel_distances'] * np.cos(self.prev['info']['noisy_rel_angles'] + self.prev['eta'][5])
+                    for x, y, v in zip(x_ts, y_ts, self.prev['info']['raw_vessels_camera']):
+                        ax.scatter(x, y, c='blue')
+                        ax.text(x+100, y-50, f"new camera data ({v.name})", c='blue')
 
 
         if verbose >= 7:

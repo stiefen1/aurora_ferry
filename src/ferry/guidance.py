@@ -16,6 +16,7 @@ from math import isclose
 
 from colav.planner import TimeSpaceColav
 from colav.obstacles.moving import MovingShip
+from colav.path.pwl import PWLTrajectory
 import colav, logging, shapely
 colav.configure_logging(level=logging.ERROR)
 
@@ -42,6 +43,7 @@ class TimespaceGuidance(IGuidance):
             delay_type: Literal['symmetric', 'late', 'early', 'flat'] = 'symmetric',
             corridor_width: float = 0.0,
             simplify_corridor: float = 0.0,
+            new_traj_offset: Optional[float] = 100, #None,
             **kwargs
     ):
         self.global_path = global_path
@@ -59,6 +61,7 @@ class TimespaceGuidance(IGuidance):
         self.delay_type = delay_type
         self.corridor_width = corridor_width
         self.simplify_corridor = simplify_corridor
+        self.new_traj_offset = new_traj_offset
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> bool:
@@ -84,9 +87,20 @@ class TimespaceGuidance(IGuidance):
                 
             # distance_along_global_path = self.global_path.
             pf_ne = self.global_path.get_target_wpts_from(states[0], states[1], self.lookahead_distance, 2)[1]
+
+            # Compute time-offset
+            
+            if self.traj is not None and self.new_traj_offset is not None:
+                prog = self.traj.progression(states[1], states[0])
+                x1, y1, t1 = self.traj.interpolate(self.new_traj_offset + prog) # type: ignore -> timespace vector of OS at start of new trajectory
+                x0, y0, t0 = self.traj.interpolate(prog)
+            else:
+                x1, y1, t1 = states[1], states[0], 0.0
+                t0 = 0.0
+
             try:
                 traj, info = self.planner.get(
-                    (states[1], states[0]),
+                    (x1, y1),
                     (pf_ne[1], pf_ne[0]),
                     ships_for_projection,
                     heading=states[5],
@@ -96,20 +110,25 @@ class TimespaceGuidance(IGuidance):
                     delay=self.delay,
                     delay_type=self.delay_type, # type: ignore
                     corridor_width=self.corridor_width,
-                    simplify_corridor=self.simplify_corridor
+                    simplify_corridor=self.simplify_corridor,
+                    t0=t1-t0
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")
                 traj = None
 
             if traj is not None: # valid trajectory was found
-                if isclose(traj(0)[0], states[1]) and  isclose(traj(0)[1], states[0]): # There are small numerical errors
+                if isclose(traj(0)[0], x1) and  isclose(traj(0)[1], y1): # There are small numerical errors
                     # print(f"Starting position was moved because p0 = {(states[1], states[0])} != {traj(0)}")
-                    self.traj = traj
-                    self.t0 = timestamp
+                    if self.traj is not None and self.new_traj_offset is not None:
+                        self.traj = PWLTrajectory([(x0, y0, 0.0)] + traj.xyt) # type: ignore
+                        self.traj.corridor_width = self.corridor_width
+                    else:
+                        self.traj = traj
+                    self.update_time = timestamp
 
         if self.traj is not None:           
-            elapsed_time = (timestamp-self.t0).total_seconds()
+            elapsed_time = (timestamp-self.update_time).total_seconds()
             # print(f"Elapsed time: {elapsed_time:.3f} seconds", " Trajectory: ", self.traj.xyt, "ne: ", states[0:2])
             # return np.array(20*[0]), {'path': self.global_path, 'V_des': self.planner.desired_speed}
 

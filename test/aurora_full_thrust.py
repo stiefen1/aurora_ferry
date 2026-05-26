@@ -28,7 +28,7 @@ sim = Simulator(
         window_size=(200, 200)
     )
 
-sim.run(tf=100, render=True, store_data=True, control_commands=np.array([0, 0, 0, 0, 1e5, 1e5, 1e5, 1e5]))
+sim.run(tf=100, render=False, store_data=True, control_commands=np.array([0, 0, 0, 0, 1e5, 1e5, 1e5, 1e5]))
 
 fig2 = sim.plot_gnc_data_multi([
     'vessel.nu[0]', 'vessel.nu[1]', 'vessel.nu[5]'

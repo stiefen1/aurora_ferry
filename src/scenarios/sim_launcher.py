@@ -30,7 +30,7 @@ class SimLauncher:
         self.ferry_route = self.map.get_ferry_routes()['Helsingør (DK) - Helsingborg (SE)']
 
 
-    def run_single_sim(self, path_to_config: LiteralString | str, render: bool = False) -> None:
+    def run_single_sim(self, path_to_config: LiteralString | str, render: bool = False, use_tqdm: bool = True) -> None:
         purepath_to_config = pathlib.Path(path_to_config) # type: ignore
         with open(purepath_to_config) as f:
             config = json.load(f)
@@ -66,20 +66,16 @@ class SimLauncher:
             case _:
                 raise ValueError(f"Invalid RL algorithm")
             
-        match scenario_generation["start"]:
-            case "Helsingor":
-                start_ne = deepcopy(self.ferry_route.waypoints[0])
-                start_ne[1] += 300
-                yaw = np.deg2rad(70)
-                ferry_route = deepcopy(self.ferry_route)
-            case "Helsingborg":
-                start_ne = deepcopy(self.ferry_route.waypoints[-1])
-                start_ne[1] -= 400
-                start_ne[0] -= 200
-                yaw = np.deg2rad(-145)
-                ferry_route = PWLPath(self.ferry_route.waypoints.tolist(), flip=True)
-            case _:
-                raise ValueError(f"Invalid start place")
+        start_ne = [scenario_generation["start"]["north"], scenario_generation["start"]["east"]]
+        w0, wN = self.ferry_route.waypoints[0], self.ferry_route.waypoints[-1]
+        if np.hypot(start_ne[0] - w0[0], start_ne[1] - w0[1]) <= np.hypot(start_ne[0] - wN[0], start_ne[1] - wN[1]):
+            yaw = np.deg2rad(70)
+            ferry_route = deepcopy(self.ferry_route)
+        else:
+            yaw = np.deg2rad(-145)
+            ferry_route = PWLPath(self.ferry_route.waypoints.tolist(), flip=True)
+            
+        print(start_ne, self.ferry_route.waypoints[0], self.ferry_route.waypoints[-1])
 
         states = np.array([*start_ne] + 3 * [0] + [yaw] + 14*[0])
 
@@ -150,7 +146,7 @@ class SimLauncher:
         
         env = NavEnv(aurora, [], [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in self.map.polygons], dt, wind=wind, current=current)
         sim = Simulator(env, dt=dt, skip_frames=10, render_mode='human', window_size=(6000, 2000), verbose=7)
-        sim.run(duration, render=render, store_data=True, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=odm["visibility"], illumination=odm["illumination"], t0=time_window[0], seed=seed)
+        sim.run(duration, render=render, store_data=True, m_tot_estimated=aurora.vessel_params.m_tot_estimated, visibility=odm["visibility"], illumination=odm["illumination"], t0=time_window[0], seed=seed, use_tqdm=use_tqdm)
 
         """
         Data to save
@@ -243,4 +239,4 @@ class SimLauncher:
 if __name__ == "__main__":
     import os
     launcher = SimLauncher()
-    launcher.run_single_sim(os.path.join("sim_data", "test", "scenarios", "test_26.json"), render=True)
+    launcher.run_single_sim(os.path.join("sim_data", "test", "scenarios", "test_9.json"), render=True)

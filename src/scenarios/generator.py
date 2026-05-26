@@ -3,14 +3,18 @@ Randomly sample an operational domain based on the admissible ranges provided in
 """
 import pathlib
 from typing import Dict, LiteralString, Optional, Any
+from python_vehicle_simulator.lib.obstacle import Obstacle
+from src.environment.map import HelsingborgMap
 
-import os, json, csv, hashlib, numpy as np, yaml
+import os, json, csv, hashlib, numpy as np, yaml, pyproj, shapely
+from shapely.ops import unary_union
 from datetime import datetime, timezone
 
 DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "test", "test.yaml")
 
 class ScenarioGenerator:
     _seed: Optional[int] = None
+    _shore_geom: Any = None
     def __init__(
             self,
             path_to_config: LiteralString,
@@ -113,8 +117,8 @@ class ScenarioGenerator:
                     sampled[key] = value
                 elif key == "ais_data_paths" and isinstance(value, list) and value:
                     sampled[key] = value[int(self.rng.integers(0, len(value)))]
-                elif key == "start" and isinstance(value, list) and value:
-                    sampled[key] = self._sample_node(value[int(self.rng.integers(0, len(value)))])
+                elif key == "start":
+                    pass  # Deferred: sampled collision-free in sample_single
                 else:
                     sampled[key] = self._sample_node(value)
             return sampled
@@ -190,6 +194,33 @@ class ScenarioGenerator:
 
         return min_t, max_t
 
+    def _get_ts_positions_at_time(self, csv_path: str, excluded_mmsi: set[int], start_sec: float, tolerance_sec: float = 30.0) -> list[tuple[float, float]]:
+        """Return (north, east) UTM positions of target ships closest to start_sec."""
+        transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:32633", always_xy=True)
+        best: dict[int, tuple[float, float, float]] = {}  # mmsi -> (abs_dt, north, east)
+        with open(csv_path, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    mmsi = int(float((row.get("mmsi") or "").strip()))
+                except (ValueError, AttributeError):
+                    continue
+                if mmsi in excluded_mmsi:
+                    continue
+                try:
+                    t = float((row.get("timestamp_sec") or "").strip())
+                except (ValueError, AttributeError):
+                    continue
+                dt = abs(t - start_sec)
+                if dt > tolerance_sec or (mmsi in best and best[mmsi][0] <= dt):
+                    continue
+                try:
+                    east, north = transformer.transform(float(row["lon"]), float(row["lat"]))
+                except (ValueError, KeyError):
+                    continue
+                best[mmsi] = (dt, north, east)
+        return [(n, e) for _, n, e in best.values()]
+
     def _attach_simulation_start_time(self, sampled: dict[str, Any]) -> tuple[float, float]:
         simulation_cfg = sampled.get("simulation")
         if not isinstance(simulation_cfg, dict):
@@ -257,6 +288,31 @@ class ScenarioGenerator:
         sampled = self._sample_node(scenario_generation)
         if isinstance(sampled, dict):
             start_sec, duration_sec = self._attach_simulation_start_time(sampled)
+            # Sample a collision-free start position now that start_sec is known
+            guidance_cfg = sampled.get("guidance", {})
+            safety_dist = float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
+            csv_path = self._resolve_data_path(sampled["ais_data_paths"])
+            excluded_mmsi = {int(v) for v in (sampled.get("mmsi_to_exclude") or [])}
+            ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec)
+            start_cfg = self.config["scenario_generation"]["start"]
+            if self._shore_geom is None:
+                _map = HelsingborgMap()
+                _obs = [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in _map.polygons]
+                self._shore_geom = unary_union([shapely.Polygon(obs.geometry.T) for obs in _obs])
+            locations = {k: v for k, v in start_cfg.items() if k != "info"}
+            loc_name = list(locations.keys())[int(self.rng.integers(0, len(locations)))]
+            ranges = locations[loc_name]
+            pos = None
+            for _ in range(100):
+                pos = {
+                    "north": self._sample_range(ranges[0][0], ranges[0][1]),
+                    "east": self._sample_range(ranges[1][0], ranges[1][1]),
+                }
+                if (all(np.hypot(pos["north"] - tn, pos["east"] - te) >= safety_dist for tn, te in ts_positions)
+                        and float(shapely.distance(shapely.Point(pos["north"], pos["east"]), self._shore_geom)) >= safety_dist):
+                    break
+            assert pos is not None, f"Failed to find a valid start position ({start_cfg}, {start_sec})"
+            sampled["start"] = pos
             self._resolve_failure_times(sampled, start_sec, duration_sec)
             sampled.pop("number_of_scenarios", None)
 

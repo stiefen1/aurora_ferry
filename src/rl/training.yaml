@@ -29,7 +29,7 @@ scenario_generation:
     r_camera: [0.00008, 640000]
 
   control:
-    path_to_weights: 'models/sac/2026_05_21_16_15_29'
+    path_to_weights: 'models/sac/2026_05_22_15_10_57'
     algorithm: 'sac'
 
   ais_data_paths:
@@ -38,7 +38,11 @@ scenario_generation:
 
   mmsi_to_exclude: [265041000]
 
-  start: ["Helsingborg", "Helsingor"]
+  start:
+    Helsingor: [[6212200, 6212700], [351600, 351900]] # 6212309, 351458
+    Helsingborg: [[6212600, 6213300], [355700, 356000]] # 6213303, 356200
+    info: "Each start position is associated with ranges for possible east-north values"
+
 
   operational_domain:
     ferry:
