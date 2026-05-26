@@ -20,6 +20,7 @@ class SimAnalyzer:
         self.path_to_json = glob.glob(os.path.join(path_to_dir, "scenarios", "*.json"))
         self.sim: List[Dict] = []
         self.config: List[Dict] = []
+        self.paths: List[str] = []
         self.load(self.path_to_json)
 
     def load(self, path_to_json: List[str]) -> None:
@@ -28,6 +29,7 @@ class SimAnalyzer:
             if Path(candidate_path_to_sim_folder).exists():
                 self.sim.append(self.load_sim(candidate_path_to_sim_folder))
                 self.config.append(self.load_config(path))
+                self.paths.append(path)
             else:
                 print(f"simulation folder <<{candidate_path_to_sim_folder}>> matching configuration file <<{path}>> not found")
 
@@ -110,6 +112,7 @@ class SimAnalyzer:
             )
             ax_pos_track_error.plot(sim["x"]["time"], sim["pos_error"], color=color)
             ax_speed_track_error.plot(sim["x"]["time"], sim["speed_error"], color=color)
+            corridor_exceeded = bool(np.any(sim["pos_error"] > float(scenario_generation["guidance"]["corridor_width"]) / 2.0))
             
             ## Target tracking accuracy
             sim["target_tracking_accuracy"] = self.target_tracking_accuracy(
@@ -172,9 +175,11 @@ class SimAnalyzer:
                 failure_causes.append("collision with shore")
             if not target_reached_ok:
                 failure_causes.append("target not reached")
+            if corridor_exceeded:
+                failure_causes.append("corridor exceeded")
 
             run_summaries.append({
-                "json_file": os.path.basename(self.path_to_json[i]),
+                "json_file": os.path.basename(self.paths[i]),
                 "success": mission_success,
                 "failure_causes": failure_causes,
                 "ts_collisions": ts_collision_events,
@@ -185,6 +190,7 @@ class SimAnalyzer:
                 "mean_pos_error": float(np.mean(sim["pos_error"])),
                 "mean_speed_error": float(np.mean(np.abs(sim["speed_error"]))),
                 "mean_power": float(np.mean(sim["power_cons"]["azimuth"] + sim["power_cons"]["thrust"])),
+                "corridor_exceeded": corridor_exceeded,
             })
 
         ax_tt.set_xlabel("time [s]")
@@ -216,6 +222,7 @@ class SimAnalyzer:
         fail_ts = sum(1 for r in run_summaries if "collision with TS" in r["failure_causes"])
         fail_shore = sum(1 for r in run_summaries if "collision with shore" in r["failure_causes"])
         fail_target = sum(1 for r in run_summaries if "target not reached" in r["failure_causes"])
+        fail_corridor = sum(1 for r in run_summaries if "corridor exceeded" in r["failure_causes"])
 
         avg_travel_distance = float(np.mean([r["travel_distance"] for r in run_summaries])) if run_summaries else float("nan")
         avg_min_dist_ts = float(np.mean([r["min_dist_ts"] for r in run_summaries if r["min_dist_ts"] is not None])) if any(r["min_dist_ts"] is not None for r in run_summaries) else float("nan")
@@ -232,6 +239,7 @@ class SimAnalyzer:
             f"- collision with TS: {fail_ts}",
             f"- collision with shore: {fail_shore}",
             f"- target not reached: {fail_target}",
+            f"- corridor exceeded: {fail_corridor}",
             "",
             "Failed missions:",
         ]
@@ -537,5 +545,7 @@ class SimAnalyzer:
 
 if __name__ == "__main__":
     import os
-    analyzer = SimAnalyzer(os.path.join("sim_data", "test"))
+    # path_to_data = os.path.join("sim_data", "test")
+    path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\test"
+    analyzer = SimAnalyzer(path_to_data)
     analyzer()

@@ -36,7 +36,8 @@ class TimespaceGuidance(IGuidance):
             max_speed: float = 7.5, # m/s
             buffer_target_ships: float = 300.0,
             speed_factor: float = 0.98,
-            term_dist: float = 500.0,
+            term_dist: float = 100.0,
+            trim_path: float = 400.0,
             dchi: float = 1.0,
             du: float = 0.1,
             delay: Optional[float] = None,
@@ -46,7 +47,7 @@ class TimespaceGuidance(IGuidance):
             new_traj_offset: Optional[float] = 100, #None,
             **kwargs
     ):
-        self.global_path = global_path
+        self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
         self.planner = TimeSpaceColav(u_des, distance_threshold=distance_threshold, shore=shore, colregs=colregs, good_seamanship=good_seamanship, abort_colregs_after_iter=abort_colregs_after_iter, max_course_rate=max_course_rate, max_speed=max_speed, speed_factor=speed_factor, **kwargs)
         self.update_every_sec = update_every_sec
         self.traj = None
@@ -64,16 +65,20 @@ class TimespaceGuidance(IGuidance):
         self.new_traj_offset = new_traj_offset
         super().__init__()
 
-    def terminated(self, states: npt.NDArray) -> bool:
+    def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
         dist_to_term = np.linalg.norm(self.global_path.waypoints[-1] - states[0:2]).astype(float)
-        return dist_to_term <= self.term_dist
+        info = {"dist_to_term": dist_to_term, "term_dist": self.term_dist}
+        if self.traj is not None:
+            progression = self.traj.progression(states[1], states[0], normalized=True)
+            return dist_to_term <= self.term_dist or progression >= 1.0, info | {"progression": progression}
+        return dist_to_term <= self.term_dist, info
 
     def __get__(self, states: npt.NDArray, current:Current, wind:Wind, obstacles:List[Obstacle], target_vessels:List[Vessel], timestamp:datetime, *args, **kwargs) -> Tuple[npt.NDArray, Dict]:
         # Update trajectory every self.update_every_sec seconds
         should_update = (self.last_update_time is None or 
                         (timestamp - self.last_update_time).total_seconds() >= self.update_every_sec)
 
-        terminated = self.terminated(states)
+        terminated, info = self.terminated(states)
 
         info = {}
         if should_update:
@@ -135,7 +140,9 @@ class TimespaceGuidance(IGuidance):
             p_des = self.traj.get_closest_point(states[1], states[0]) # east-north
             #  'ne_des': (p_des[1], p_des[0])
 
-            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [self.traj.get_speed(elapsed_time)] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': self.traj.get_speed(elapsed_time)} | info | {'term': terminated}
+            V_des = self.traj.get_speed(elapsed_time)
+
+            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_des] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_des} | info | {'term': terminated}
 
         # self.prev = {'eta_des': states[0:6], 'nu_des': states[6:12], 'states_des': states, 'info': self.prev['info']}
         return states, {'path': None, 'V_des': None, 'term': terminated} # type:ignore

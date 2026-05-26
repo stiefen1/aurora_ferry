@@ -13,9 +13,10 @@ scenario_generation:
     lookahead_distance: 1500.0
     colregs: True
     good_seamanship: True
-    abort_colregs_after_iter: 1
+    abort_colregs_after_iter: 3
     buffer_target_ships: 100.0
-    term_dist: 500.0
+    trim_path: 400.0
+    term_dist: 100.0
     dchi: 10.0
     du: 0.5
     delay: 20
