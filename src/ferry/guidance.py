@@ -45,10 +45,13 @@ class TimespaceGuidance(IGuidance):
             corridor_width: float = 0.0,
             simplify_corridor: float = 0.0,
             new_traj_offset: Optional[float] = 100, #None,
+            max_iter: int = 10,
+            move_p_0_allowed_after_iter: Optional[int] = 0,
+            move_p_f_allowed_after_iter: Optional[int] = None,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
-        self.planner = TimeSpaceColav(u_des, distance_threshold=distance_threshold, shore=shore, colregs=colregs, good_seamanship=good_seamanship, abort_colregs_after_iter=abort_colregs_after_iter, max_course_rate=max_course_rate, max_speed=max_speed, speed_factor=speed_factor, **kwargs)
+        self.planner = TimeSpaceColav(u_des, distance_threshold=distance_threshold, shore=shore, colregs=colregs, good_seamanship=good_seamanship, abort_colregs_after_iter=abort_colregs_after_iter, max_course_rate=max_course_rate, max_speed=max_speed, speed_factor=speed_factor, max_iter=max_iter, **kwargs)
         self.update_every_sec = update_every_sec
         self.traj = None
         self.last_update_time = None
@@ -63,6 +66,8 @@ class TimespaceGuidance(IGuidance):
         self.corridor_width = corridor_width
         self.simplify_corridor = simplify_corridor
         self.new_traj_offset = new_traj_offset
+        self.move_p_0_allowed_after_iter = move_p_0_allowed_after_iter
+        self.move_p_f_allowed_after_iter = move_p_f_allowed_after_iter
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -117,8 +122,8 @@ class TimespaceGuidance(IGuidance):
                     corridor_width=self.corridor_width,
                     simplify_corridor=self.simplify_corridor,
                     t0=t1-t0,
-                    move_p_0_allowed_after_iter=0,
-                    move_p_f_allowed_after_iter=self.planner.max_iter-1
+                    move_p_0_allowed_after_iter=self.move_p_0_allowed_after_iter,
+                    move_p_f_allowed_after_iter=self.move_p_f_allowed_after_iter,
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")

@@ -18,7 +18,7 @@ scenario_generation:
     trim_path: 400.0
     term_dist: 100.0
     dchi: 5.0
-    du: 0.5
+    du: 0.1
     delay: 10
     delay_type: 'symmetric'
     corridor_width: 50
