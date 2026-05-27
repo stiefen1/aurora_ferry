@@ -194,10 +194,12 @@ class ScenarioGenerator:
 
         return min_t, max_t
 
-    def _get_ts_positions_at_time(self, csv_path: str, excluded_mmsi: set[int], start_sec: float, tolerance_sec: float = 30.0) -> list[tuple[float, float]]:
-        """Return (north, east) UTM positions of target ships closest to start_sec."""
+    def _get_ts_positions_at_time(self, csv_path: str, excluded_mmsi: set[int], start_sec: float, tolerance_sec: float = 30.0, lookahead_sec: float = 30.0) -> list[tuple[float, float]]:
+        """Return (north, east) UTM positions of all target ships in [start_sec - tolerance_sec, start_sec + lookahead_sec]."""
         transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:32633", always_xy=True)
-        best: dict[int, tuple[float, float, float]] = {}  # mmsi -> (abs_dt, north, east)
+        positions: list[tuple[float, float]] = []
+        t_lo = start_sec - tolerance_sec
+        t_hi = start_sec + lookahead_sec
         with open(csv_path, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -211,15 +213,14 @@ class ScenarioGenerator:
                     t = float((row.get("timestamp_sec") or "").strip())
                 except (ValueError, AttributeError):
                     continue
-                dt = abs(t - start_sec)
-                if dt > tolerance_sec or (mmsi in best and best[mmsi][0] <= dt):
+                if not (t_lo <= t <= t_hi):
                     continue
                 try:
                     east, north = transformer.transform(float(row["lon"]), float(row["lat"]))
                 except (ValueError, KeyError):
                     continue
-                best[mmsi] = (dt, north, east)
-        return [(n, e) for _, n, e in best.values()]
+                positions.append((north, east))
+        return positions
 
     def _attach_simulation_start_time(self, sampled: dict[str, Any]) -> tuple[float, float]:
         simulation_cfg = sampled.get("simulation")
@@ -293,7 +294,7 @@ class ScenarioGenerator:
             safety_dist = float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
             csv_path = self._resolve_data_path(sampled["ais_data_paths"]).replace('raw', 'smooth_interp')
             excluded_mmsi = {int(v) for v in (sampled.get("mmsi_to_exclude") or [])}
-            ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec)
+            ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec, lookahead_sec=30.0)
             start_cfg = self.config["scenario_generation"]["start"]
             if self._shore_geom is None:
                 _map = HelsingborgMap()
