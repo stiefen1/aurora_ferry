@@ -271,9 +271,9 @@ class TrajTrackingEnv(gym.Env):
         p = self.weighted_power_consumption()
         # print(d/200, se/self.own_vessel.vessel_params.surge_speed_max, 50*p)
 
-        return np.exp(-d/100) * (
-            1 + np.exp(-se/2.0) * (
-                1 + np.exp(-100*p)
+        return np.exp(-d/30) * (
+            1 + 2*np.exp(-se/2.0) * (
+                1 + 6*np.exp(-20*p)
                 )
             )
 
