@@ -116,7 +116,9 @@ class TimespaceGuidance(IGuidance):
                     delay_type=self.delay_type, # type: ignore
                     corridor_width=self.corridor_width,
                     simplify_corridor=self.simplify_corridor,
-                    t0=t1-t0
+                    t0=t1-t0,
+                    move_p_0_allowed_after_iter=0,
+                    move_p_f_allowed_after_iter=self.planner.max_iter-1
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")
