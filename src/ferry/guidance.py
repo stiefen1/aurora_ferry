@@ -49,6 +49,7 @@ class TimespaceGuidance(IGuidance):
             move_p_0_allowed_after_iter: Optional[int] = 0,
             move_p_f_allowed_after_iter: Optional[int] = None,
             smooth_radius: Optional[float] = None,
+            kp: float = 0.01,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
@@ -70,6 +71,7 @@ class TimespaceGuidance(IGuidance):
         self.move_p_0_allowed_after_iter = move_p_0_allowed_after_iter
         self.move_p_f_allowed_after_iter = move_p_f_allowed_after_iter
         self.smooth_radius = smooth_radius
+        self.kp = kp
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -152,7 +154,11 @@ class TimespaceGuidance(IGuidance):
 
             V_des = self.traj.get_speed(elapsed_time)
 
-            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_des] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_des} | info | {'term': terminated}
+            xy = np.array(self.traj(elapsed_time))
+
+            V_command = V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]])) 
+
+            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command} | info | {'term': terminated}
 
         # self.prev = {'eta_des': states[0:6], 'nu_des': states[6:12], 'states_des': states, 'info': self.prev['info']}
         return states, {'path': None, 'V_des': None, 'term': terminated} # type:ignore
