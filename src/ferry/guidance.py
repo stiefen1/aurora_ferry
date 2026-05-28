@@ -48,6 +48,7 @@ class TimespaceGuidance(IGuidance):
             max_iter: int = 10,
             move_p_0_allowed_after_iter: Optional[int] = 0,
             move_p_f_allowed_after_iter: Optional[int] = None,
+            smooth_radius: Optional[float] = None,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
@@ -68,6 +69,7 @@ class TimespaceGuidance(IGuidance):
         self.new_traj_offset = new_traj_offset
         self.move_p_0_allowed_after_iter = move_p_0_allowed_after_iter
         self.move_p_f_allowed_after_iter = move_p_f_allowed_after_iter
+        self.smooth_radius = smooth_radius
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -124,6 +126,7 @@ class TimespaceGuidance(IGuidance):
                     t0=t1-t0,
                     move_p_0_allowed_after_iter=self.move_p_0_allowed_after_iter,
                     move_p_f_allowed_after_iter=self.move_p_f_allowed_after_iter,
+                    smooth_radius=self.smooth_radius
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")

@@ -164,7 +164,7 @@ class TrajTrackingEnv(gym.Env):
             target_vessel.reset()
 
         # Sample a new target position within map bounds
-        self.path = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed).smooth(200)
+        self.path = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed).smooth(scenario["guidance"]["smooth_radius"]) # type: ignore
         # self.sample_new_target_speed()
         # self.current_waypoint = 1
         self.V_des = scenario["operational_domain"]["ferry"]["target_speed"]
