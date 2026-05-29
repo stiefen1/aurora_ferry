@@ -27,6 +27,7 @@ scenario_generation:
     max_iter: 10
     move_p_0_allowed_after_iter: 0
     move_p_f_allowed_after_iter: 9
+    smooth_radius: 200.0
 
   navigation:
     q_tt: [0.1, 0.1, 0.001, 0.0003]

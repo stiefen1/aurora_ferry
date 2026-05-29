@@ -5,6 +5,7 @@ from python_vehicle_simulator.lib.obstacle import Obstacle
 from python_vehicle_simulator.utils.math_fn import ssa
 from src.environment.map import HelsingborgMap
 from src.ais.ais import AIS, Vessel
+from src.ferry.aurora import AuroraFerryParameters
 import glob, os, numpy as np, json, pandas as pd, datetime, matplotlib.pyplot as plt, numpy.typing as npt
 import shapely
 from tqdm import tqdm
@@ -17,25 +18,27 @@ class SimAnalyzer:
             path_to_dir: str
     ):
         self.path_to_dir = path_to_dir
-        self.path_to_json = glob.glob(os.path.join(path_to_dir, "scenarios", "*.json"))
+        self.path_to_sim = glob.glob(os.path.join(path_to_dir, "simulations", "*/"))
         self.sim: List[Dict] = []
         self.config: List[Dict] = []
         self.paths: List[str] = []
-        self.load(self.path_to_json)
+        self.load(self.path_to_sim)
 
-    def load(self, path_to_json: List[str]) -> None:
-        for path in path_to_json:
-            candidate_path_to_sim_folder = path.replace('scenarios', 'simulations').replace('.json', '')
-            if Path(candidate_path_to_sim_folder).exists():
-                self.sim.append(self.load_sim(candidate_path_to_sim_folder))
-                self.config.append(self.load_config(path))
-                self.paths.append(path)
+    def load(self, path_to_sim: List[str]) -> None:
+        for path in path_to_sim:
+            print(path)
+            candidate_path_to_json_file = path.replace('simulations', 'scenarios')[0:-1] + '.json'
+            if Path(candidate_path_to_json_file).exists():
+                self.sim.append(self.load_sim(path))
+                self.config.append(self.load_config(candidate_path_to_json_file))
+                self.paths.append(candidate_path_to_json_file)
             else:
-                print(f"simulation folder <<{candidate_path_to_sim_folder}>> matching configuration file <<{path}>> not found")
+                print(f"simulation folder <<{path}>> matching configuration file <<{candidate_path_to_json_file}>> not found")
 
     def __call__(self) -> None:
         ## Load shore
         helsingborg = HelsingborgMap()
+        ferry_params = AuroraFerryParameters()
         ferry_route = helsingborg.get_ferry_routes()['Helsingør (DK) - Helsingborg (SE)']
         obstacles = [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in helsingborg.polygons] # HelsingborgMap().get_shore_as_obstacles()
         shore_geom = unary_union([shapely.Polygon(obs.geometry.T) for obs in obstacles])
@@ -98,7 +101,7 @@ class SimAnalyzer:
             ax_dist2shore.plot(sim["x"]["time"], sim["distance_to_shore"], color=color)
 
             ## Target reached
-            sim["target_reached"] = self.target_reached(sim["x"], ferry_route.waypoints, scenario_generation["start"], scenario_generation["guidance"]["term_dist"])
+            sim["target_reached"] = self.target_reached(sim["x"], ferry_route.waypoints, scenario_generation["start"], scenario_generation["guidance"]["term_dist"]+scenario_generation["guidance"]["trim_path"])
 
             ## Travel distance
             sim["travel_distance"] = self.travel_distance(
@@ -165,7 +168,7 @@ class SimAnalyzer:
 
             target_reached_ok = bool(sim["target_reached"][0])
             ts_ok = bool(min_dist_ts >= buffer_dist)
-            shore_ok = bool(min_dist_shore >= buffer_dist)
+            shore_ok = bool(min_dist_shore**2 >= (ferry_params.loa/2)**2 + (ferry_params.beam/2)**2)
             mission_success = target_reached_ok and ts_ok and shore_ok
 
             failure_causes: List[str] = []
@@ -545,7 +548,7 @@ class SimAnalyzer:
 
 if __name__ == "__main__":
     import os
-    # path_to_data = os.path.join("sim_data", "test")
+    # path_to_data = os.path.join("sim_data", "test") 
     path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\test"
     analyzer = SimAnalyzer(path_to_data)
     analyzer()

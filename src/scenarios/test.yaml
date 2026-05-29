@@ -10,19 +10,24 @@ scenario_generation:
 
   guidance: 
     update_every_sec: 30
-    lookahead_distance: 1000.0
-    colregs: True
-    good_seamanship: True
+    lookahead_distance: 2000.0
+    colregs: true
+    good_seamanship: true
     abort_colregs_after_iter: 3
+    max_course_rate: 0.5
     buffer_target_ships: 100.0
-    trim_path: 400.0
-    term_dist: 100.0
+    trim_path: 600.0
+    term_dist: 200.0
     dchi: 5.0
     du: 0.1
-    delay: 10
+    delay: 5
     delay_type: 'symmetric'
-    corridor_width: 50
+    corridor_width: 80
     simplify_corridor: 1
+    max_iter: 10
+    move_p_0_allowed_after_iter: 0
+    move_p_f_allowed_after_iter: 9
+    smooth_radius: 200.0
 
   navigation:
     q_tt: [1, 1, 0.01, 0.0003]
