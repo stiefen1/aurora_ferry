@@ -385,7 +385,7 @@ class TrajTrackingEnv(gym.Env):
             distance = float(np.linalg.norm(delta))
             rel_yaw = ssa(yaw + np.atan2(-delta[1], delta[0]))
             rel_yaws_cos.append(np.cos(rel_yaw))
-            rel_yaws_sin.append(np.cos(rel_yaw))
+            rel_yaws_sin.append(np.sin(rel_yaw))
             distances.append(distance)
 
         # Normalize each and cast to float32
