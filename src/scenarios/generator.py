@@ -7,6 +7,7 @@ from python_vehicle_simulator.lib.obstacle import Obstacle
 from src.environment.map import HelsingborgMap
 
 import os, json, csv, hashlib, numpy as np, yaml, pyproj, shapely
+import glob
 from shapely.ops import unary_union
 from datetime import datetime, timezone
 
@@ -117,6 +118,12 @@ class ScenarioGenerator:
                     sampled[key] = value
                 elif key == "ais_data_paths" and isinstance(value, list) and value:
                     sampled[key] = value[int(self.rng.integers(0, len(value)))]
+                elif key == "ais_data_paths" and isinstance(value, str) and value:
+                    folder_path = self._resolve_data_path(value)
+                    csv_paths = glob.glob(os.path.join(folder_path, "*.csv"))
+                    if not csv_paths:
+                        raise ValueError(f"No CSV files found in ais_data_paths folder: {value}")
+                    sampled[key] = csv_paths[int(self.rng.integers(0, len(csv_paths)))]
                 elif key == "start":
                     pass  # Deferred: sampled collision-free in sample_single
                 else:
