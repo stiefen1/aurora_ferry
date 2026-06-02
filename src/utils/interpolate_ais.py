@@ -39,7 +39,7 @@ def load_ais_csv(filename):
     return pd.read_csv(filename)
 
 
-def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ships=[], remove_stationary=True, min_speed=0.5) -> pd.DataFrame:
+def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ships=[], remove_stationary=True, min_speed=0.5, max_gap_seconds=60.0) -> pd.DataFrame:
     """
     Interpolate AIS data to regular time intervals with optional smoothing.
     
@@ -51,6 +51,7 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ships=[], r
     - exclude_ships: list of MMSI integers to exclude from interpolation
     - remove_stationary: remove vessels that are not moving (in port)
     - min_speed: minimum speed in knots to consider vessel as moving
+    - max_gap_seconds: maximum allowed gap to interpolate across for same vessel
     
     Returns:
     - DataFrame with interpolated and optionally smoothed data at regular intervals
@@ -88,59 +89,64 @@ def interpolate_ais_data(df, dt=1.0, smooth=True, sigma=2.0, exclude_ships=[], r
     for mmsi in df['mmsi'].unique():
         vessel_data = df[df['mmsi'] == mmsi].copy()
         vessel_data = vessel_data.sort_values('timestamp_sec')
-        
-        # Create time grid for THIS vessel only (not global range)
-        vessel_start_time = vessel_data['timestamp_sec'].min()
-        vessel_end_time = vessel_data['timestamp_sec'].max()
-        new_times = np.arange(vessel_start_time, vessel_end_time + dt, dt)
-        
-        # Interpolate numeric columns
-        numeric_cols = ['lat', 'lon', 'sog', 'cog', 'heading']
-        
-        # Create new DataFrame for this vessel
-        vessel_interp = pd.DataFrame({'timestamp_sec': new_times})
-        vessel_interp['mmsi'] = mmsi
-        
-        # Convert timestamp_sec to datetime format to match original AIS format
-        vessel_interp['timestamp'] = pd.to_datetime(vessel_interp['timestamp_sec'], unit='s')
-        vessel_interp['timestamp'] = vessel_interp['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Copy non-numeric fields from first record
-        for col in ['name', 'ship_type', 'length', 'width']:
-            if col in vessel_data.columns:
-                vessel_interp[col] = vessel_data[col].iloc[0]
-        
-        # Interpolate numeric fields
-        for col in numeric_cols:
-            if col in vessel_data.columns:
-                # Basic linear interpolation
-                interpolated_values = np.interp(
-                    new_times, 
-                    vessel_data['timestamp_sec'], 
-                    vessel_data[col].ffill()
-                )
-                
-                # Apply smoothing if requested
-                if smooth and len(interpolated_values) > 3:
-                    # Handle circular angles (cog, heading) differently
-                    if col in ['cog', 'heading']:
-                        # Convert to unit vectors, smooth, then back to angles
-                        angles_rad = np.deg2rad(interpolated_values)
-                        cos_vals = ndimage.gaussian_filter1d(np.cos(angles_rad), sigma=sigma)
-                        sin_vals = ndimage.gaussian_filter1d(np.sin(angles_rad), sigma=sigma)
-                        smoothed_angles = np.rad2deg(np.arctan2(sin_vals, cos_vals))
-                        # Ensure positive angles
-                        smoothed_angles = (smoothed_angles + 360) % 360
-                        vessel_interp[col] = smoothed_angles
+
+        # Split tracks when AIS silence exceeds threshold, then interpolate each segment independently.
+        gaps = vessel_data['timestamp_sec'].diff().fillna(0)
+        segment_id = (gaps > max_gap_seconds).cumsum()
+
+        for _, segment_data in vessel_data.groupby(segment_id):
+            # Create time grid for this segment only
+            segment_start_time = segment_data['timestamp_sec'].min()
+            segment_end_time = segment_data['timestamp_sec'].max()
+            new_times = np.arange(segment_start_time, segment_end_time + dt, dt)
+
+            # Interpolate numeric columns
+            numeric_cols = ['lat', 'lon', 'sog', 'cog', 'heading']
+
+            # Create new DataFrame for this vessel segment
+            vessel_interp = pd.DataFrame({'timestamp_sec': new_times})
+            vessel_interp['mmsi'] = mmsi
+
+            # Convert timestamp_sec to datetime format to match original AIS format
+            vessel_interp['timestamp'] = pd.to_datetime(vessel_interp['timestamp_sec'], unit='s')
+            vessel_interp['timestamp'] = vessel_interp['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+            # Copy non-numeric fields from first record in this segment
+            for col in ['name', 'ship_type', 'length', 'width']:
+                if col in segment_data.columns:
+                    vessel_interp[col] = segment_data[col].iloc[0]
+
+            # Interpolate numeric fields
+            for col in numeric_cols:
+                if col in segment_data.columns:
+                    # Basic linear interpolation
+                    interpolated_values = np.interp(
+                        new_times,
+                        segment_data['timestamp_sec'],
+                        segment_data[col].ffill()
+                    )
+
+                    # Apply smoothing if requested
+                    if smooth and len(interpolated_values) > 3:
+                        # Handle circular angles (cog, heading) differently
+                        if col in ['cog', 'heading']:
+                            # Convert to unit vectors, smooth, then back to angles
+                            angles_rad = np.deg2rad(interpolated_values)
+                            cos_vals = ndimage.gaussian_filter1d(np.cos(angles_rad), sigma=sigma)
+                            sin_vals = ndimage.gaussian_filter1d(np.sin(angles_rad), sigma=sigma)
+                            smoothed_angles = np.rad2deg(np.arctan2(sin_vals, cos_vals))
+                            # Ensure positive angles
+                            smoothed_angles = (smoothed_angles + 360) % 360
+                            vessel_interp[col] = smoothed_angles
+                        else:
+                            # Regular smoothing for lat, lon, sog
+                            vessel_interp[col] = ndimage.gaussian_filter1d(interpolated_values, sigma=sigma)
                     else:
-                        # Regular smoothing for lat, lon, sog
-                        vessel_interp[col] = ndimage.gaussian_filter1d(interpolated_values, sigma=sigma)
+                        vessel_interp[col] = interpolated_values
                 else:
-                    vessel_interp[col] = interpolated_values
-            else:
-                vessel_interp[col] = np.nan
-        
-        interpolated_data.append(vessel_interp)
+                    vessel_interp[col] = np.nan
+
+            interpolated_data.append(vessel_interp)
     
     return pd.concat(interpolated_data, ignore_index=True)
 
@@ -240,7 +246,8 @@ if __name__ == "__main__":
     
     # Compare trajectories with and without smoothing
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 6))
-    test_file = files[0]
+    test_file = "data\\raw\\crossing_141.csv" #files[0]
+    print("test file: ", files[0])
 
 
     plot_ship_trajectories(ax1, test_file)
