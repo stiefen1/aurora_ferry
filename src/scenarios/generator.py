@@ -194,10 +194,10 @@ class ScenarioGenerator:
 
         return min_t, max_t
 
-    def _get_ts_positions_at_time(self, csv_path: str, excluded_mmsi: set[int], start_sec: float, tolerance_sec: float = 30.0, lookahead_sec: float = 30.0) -> list[tuple[float, float]]:
-        """Return (north, east) UTM positions of all target ships in [start_sec - tolerance_sec, start_sec + lookahead_sec]."""
+    def _get_ts_positions_at_time(self, csv_path: str, excluded_mmsi: set[int], start_sec: float, tolerance_sec: float = 30.0, lookahead_sec: float = 30.0) -> list[tuple[float, float, float]]:
+        """Return (north, east, envelope_radius_m) of TS in [start_sec - tolerance_sec, start_sec + lookahead_sec]."""
         transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:32633", always_xy=True)
-        positions: list[tuple[float, float]] = []
+        positions: list[tuple[float, float, float]] = []
         t_lo = start_sec - tolerance_sec
         t_hi = start_sec + lookahead_sec
         with open(csv_path, "r", encoding="utf-8", newline="") as f:
@@ -219,7 +219,18 @@ class ScenarioGenerator:
                     east, north = transformer.transform(float(row["lon"]), float(row["lat"]))
                 except (ValueError, KeyError):
                     continue
-                positions.append((north, east))
+                length_m = 0.0
+                width_m = 0.0
+                try:
+                    length_m = float((row.get("length") or "").strip() or 0.0)
+                except (ValueError, AttributeError):
+                    pass
+                try:
+                    width_m = float((row.get("width") or "").strip() or 0.0)
+                except (ValueError, AttributeError):
+                    pass
+                envelope_radius_m = float(np.hypot(0.5 * length_m, 0.5 * width_m))
+                positions.append((north, east, envelope_radius_m))
         return positions
 
     def _attach_simulation_start_time(self, sampled: dict[str, Any]) -> tuple[float, float]:
@@ -290,7 +301,7 @@ class ScenarioGenerator:
         if isinstance(sampled, dict):
             start_sec, duration_sec = self._attach_simulation_start_time(sampled)
             # Sample a collision-free start position now that start_sec is known
-            safety_dist = float(scenario_generation.get("safety_distance_at_spawn", 250)) # float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
+            safety_dist = float(scenario_generation.get("safety_distance_at_spawn", 200)) # float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
             csv_path = self._resolve_data_path(sampled["ais_data_paths"]).replace('raw', 'smooth_interp')
             excluded_mmsi = {int(v) for v in (sampled.get("mmsi_to_exclude") or [])}
             ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec, lookahead_sec=30.0)
@@ -308,7 +319,8 @@ class ScenarioGenerator:
                     "north": self._sample_range(ranges[0][0], ranges[0][1]),
                     "east": self._sample_range(ranges[1][0], ranges[1][1]),
                 }
-                if (all(np.hypot(pos["north"] - tn, pos["east"] - te) >= safety_dist for tn, te in ts_positions)
+                if (all(np.hypot(pos["north"] - tn, pos["east"] - te) >= (safety_dist + ts_radius)
+                    for tn, te, ts_radius in ts_positions)
                         and float(shapely.distance(shapely.Point(pos["north"], pos["east"]), self._shore_geom)) >= safety_dist):
                     break
             assert pos is not None, f"Failed to find a valid start position ({start_cfg}, {start_sec})"
