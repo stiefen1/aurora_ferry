@@ -24,6 +24,8 @@ for f in list_of_config_files:
     df_smooth_interp.to_csv(path_to_interp)
     print(f"Processed {os.path.basename(f)}")
 
+odm_gen() # Generate configuration files in same directory
+
 # Launch simulations
 launcher = SimLauncher()
 for i, config_file in enumerate(sim_config_files):
