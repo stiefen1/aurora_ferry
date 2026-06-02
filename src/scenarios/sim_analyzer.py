@@ -35,6 +35,25 @@ class SimAnalyzer:
             else:
                 print(f"simulation folder <<{path}>> matching configuration file <<{candidate_path_to_json_file}>> not found")
 
+    @staticmethod
+    def _resolve_local_data_path(path_value: str) -> str:
+        # Keep true absolute paths when they exist (e.g., cluster paths).
+        if os.path.isabs(path_value) and os.path.exists(path_value):
+            return path_value
+
+        # Support portable repo-root style paths like /data/raw/file.csv.
+        normalized = path_value.lstrip("/\\")
+        candidates = [
+            os.path.join(os.getcwd(), normalized),
+            os.path.join(os.getcwd(), path_value),
+        ]
+        for candidate in candidates:
+            candidate_abs = os.path.abspath(candidate)
+            if os.path.exists(candidate_abs):
+                return candidate_abs
+
+        return os.path.abspath(candidates[0])
+
     def __call__(self) -> None:
         ## Load shore
         helsingborg = HelsingborgMap()
@@ -320,7 +339,8 @@ class SimAnalyzer:
         time_tolerance = dt / 2
         out: Dict = {}
 
-        ais = AIS(path_to_csv, t0=time_window[0], tf=time_window[1], mmsi_to_exclude=mmsi_to_exclude)
+        resolved_path = self._resolve_local_data_path(path_to_csv)
+        ais = AIS(resolved_path, t0=time_window[0], tf=time_window[1], mmsi_to_exclude=mmsi_to_exclude)
         mmsi_col = ais.column_mapping["mmsi"]
         ts_col = ais.column_mapping["timestamp"]
 
@@ -461,7 +481,8 @@ class SimAnalyzer:
         }
         """
         time_tolerance = dt / 2
-        ais = AIS(path_to_csv, t0=time_window[0], tf=time_window[1], mmsi_to_exclude=mmsi_to_exclude)
+        resolved_path = self._resolve_local_data_path(path_to_csv)
+        ais = AIS(resolved_path, t0=time_window[0], tf=time_window[1], mmsi_to_exclude=mmsi_to_exclude)
 
         # Build own-ship dataframe once (vectorized time and position extraction).
         # Use simulation t0 + i*dt for robust timestamp alignment.
@@ -549,6 +570,6 @@ class SimAnalyzer:
 if __name__ == "__main__":
     import os
     # path_to_data = os.path.join("sim_data", "test") 
-    path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\test"
+    path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs"
     analyzer = SimAnalyzer(path_to_data)
     analyzer()
