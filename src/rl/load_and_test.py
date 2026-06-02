@@ -7,7 +7,7 @@ from src.ferry.aurora import AuroraFerry
 from src.rl.traj_tracking_env import TrajTrackingEnv
 
 alg = "sac"
-date_and_time = "2026_05_27_20_35_02" # "hpc"
+date_and_time = "2026_06_01_20_00_06" # "hpc"
 weights_name = "aurora_4500000_steps.zip"
 # Z:\dev\aurora_ferry\models\sac\2026_05_27_20_35_02
 
@@ -30,8 +30,8 @@ env = gym.wrappers.FlattenObservation(env)
 # model = SAC.load(os.path.join("models", alg, date_and_time, 'aurora.zip'))
 # model = SAC.load(os.path.join("checkpoints", alg, date_and_time, weights_name))
 # model = PPO.load(os.path.join("models", alg, date_and_time, weights_name))
-# model = SAC.load(os.path.join("Z:\\dev", "aurora_ferry", "models", alg, date_and_time, 'aurora.zip'))
-model = SAC.load(os.path.join("Z:\\dev", "aurora_ferry", "checkpoints", alg, date_and_time, weights_name))
+model = SAC.load(os.path.join("Z:\\dev", "aurora_ferry", "models", alg, date_and_time, 'aurora.zip'))
+# model = SAC.load(os.path.join("Z:\\dev", "aurora_ferry", "checkpoints", alg, date_and_time, weights_name))
 
 
 

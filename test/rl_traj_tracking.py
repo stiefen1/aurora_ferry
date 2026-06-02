@@ -41,7 +41,8 @@ SEED = 42
 # TODO: forward uncertainty from kalman filter pose estimation to timespace colav ?
 # TODO: Implement realistic matching between camera data and already existing targets
 # TODO: Improve traj tracking accuracy
-# TODO: In the report, also mention when traj tracking error exceeds limits
+# TODO: Add time delay violation in report
+# TODO: Try to encode angles as cos(a), sin(a) to avoid jump between -pi, pi
 
 aurora = AuroraFerry(
     dt,

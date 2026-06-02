@@ -5,13 +5,12 @@ from src.scenarios.sim_launcher import SimLauncher
 from src.scenarios.sim_analyzer import SimAnalyzer
 from src.utils.interpolate_ais import load_ais_csv, interpolate_ais_data
 
-FOLDER = os.path.join("sim_data", "test")
-CONFIG_FILENAME = "test.yaml"
+FOLDER = os.path.join("sim_data", "cos_sin_obs")
+CONFIG_FILENAME = "cos_sin_obs.yaml"
 PATH_TO_CONFIG = os.path.join(FOLDER, CONFIG_FILENAME)
 
 # Generate configuration files
 odm_gen = ScenarioGenerator(PATH_TO_CONFIG)
-odm_gen() # Generate configuration files in same directory
 sim_config_files = glob.glob(os.path.join(os.path.dirname(PATH_TO_CONFIG), "scenarios", "*.json"))
 
 # Interpolate AIS data

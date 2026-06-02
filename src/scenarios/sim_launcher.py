@@ -239,4 +239,6 @@ class SimLauncher:
 if __name__ == "__main__":
     import os
     launcher = SimLauncher()
-    launcher.run_single_sim(os.path.join("sim_data", "test", "scenarios", "test_9.json"), render=True)
+    # path_to_scenario = "Z:\\dev\\aurora_ferry\\sim_data\\test\\scenarios\\test_744.json"
+    path_to_scenario = os.path.join("sim_data", "cos_sin_obs", "scenarios", "cos_sin_obs_6.json")
+    launcher.run_single_sim(path_to_scenario, render=True)

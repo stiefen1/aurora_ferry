@@ -10,7 +10,7 @@ import os, json, csv, hashlib, numpy as np, yaml, pyproj, shapely
 from shapely.ops import unary_union
 from datetime import datetime, timezone
 
-DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "test", "test.yaml")
+DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "cos_sin_obs", "cos_sin_obs.yaml")
 
 class ScenarioGenerator:
     _seed: Optional[int] = None
