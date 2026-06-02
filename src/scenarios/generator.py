@@ -290,8 +290,7 @@ class ScenarioGenerator:
         if isinstance(sampled, dict):
             start_sec, duration_sec = self._attach_simulation_start_time(sampled)
             # Sample a collision-free start position now that start_sec is known
-            guidance_cfg = sampled.get("guidance", {})
-            safety_dist = float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
+            safety_dist = float(scenario_generation.get("safety_distance_at_spawn", 250)) # float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
             csv_path = self._resolve_data_path(sampled["ais_data_paths"]).replace('raw', 'smooth_interp')
             excluded_mmsi = {int(v) for v in (sampled.get("mmsi_to_exclude") or [])}
             ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec, lookahead_sec=30.0)
