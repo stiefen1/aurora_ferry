@@ -29,6 +29,25 @@ class SimLauncher:
         self.map = HelsingborgMap()
         self.ferry_route = self.map.get_ferry_routes()['Helsingør (DK) - Helsingborg (SE)']
 
+    @staticmethod
+    def _resolve_local_data_path(path_value: str) -> str:
+        # Keep true absolute paths when they exist (e.g., cluster paths).
+        if os.path.isabs(path_value) and os.path.exists(path_value):
+            return path_value
+
+        # Support portable repo-root style paths like /data/raw/file.csv.
+        normalized = path_value.lstrip("/\\")
+        candidates = [
+            os.path.join(os.getcwd(), normalized),
+            os.path.join(os.getcwd(), path_value),
+        ]
+        for candidate in candidates:
+            candidate_abs = os.path.abspath(candidate)
+            if os.path.exists(candidate_abs):
+                return candidate_abs
+
+        return os.path.abspath(candidates[0])
+
 
     def run_single_sim(self, path_to_config: LiteralString | str, render: bool = False, use_tqdm: bool = True) -> None:
         purepath_to_config = pathlib.Path(path_to_config) # type: ignore
@@ -80,9 +99,10 @@ class SimLauncher:
         states = np.array([*start_ne] + 3 * [0] + [yaw] + 14*[0])
 
         sensors = {}
+        ais_data_path = self._resolve_local_data_path(scenario_generation["ais_data_paths"])
         if scenario_generation["sensors"]["ais"]["enabled"]:
             sensors["ais"] = AIS(
-                scenario_generation["ais_data_paths"],
+                ais_data_path,
                 t0=time_window[0],
                 tf=time_window[1],
                 mmsi_to_exclude=mmsi_to_exclude, # Aurora AF Helsingborg, since that's us
@@ -90,7 +110,7 @@ class SimLauncher:
                 )
         if scenario_generation["sensors"]["camera"]["enabled"]:
             sensors["camera"] = Camera(
-                scenario_generation["ais_data_paths"].replace("raw", "smooth_interp"),
+                ais_data_path.replace("raw", "smooth_interp"),
                 t0=time_window[0],
                 tf=time_window[1],
                 mmsi_to_exclude=mmsi_to_exclude,
@@ -239,6 +259,6 @@ class SimLauncher:
 if __name__ == "__main__":
     import os
     launcher = SimLauncher()
-    # path_to_scenario = "Z:\\dev\\aurora_ferry\\sim_data\\test\\scenarios\\test_744.json"
-    path_to_scenario = os.path.join("sim_data", "cos_sin_obs", "scenarios", "cos_sin_obs_6.json")
+    # path_to_scenario = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs\\scenarios\\cos_sin_obs_0.json"
+    path_to_scenario = os.path.join("sim_data", "cos_sin_obs", "scenarios", "cos_sin_obs_0.json")
     launcher.run_single_sim(path_to_scenario, render=True)

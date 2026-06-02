@@ -38,9 +38,7 @@ scenario_generation:
     path_to_weights: 'models/sac/2026_05_22_15_10_57'
     algorithm: 'sac'
 
-  ais_data_paths:
-    - "data/raw/2023_04_06.csv"
-    - "data/raw/2023_04_15.csv"
+  ais_data_paths: "data/raw"
 
   mmsi_to_exclude: [265041000]
 

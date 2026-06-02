@@ -123,7 +123,9 @@ class ScenarioGenerator:
                     csv_paths = glob.glob(os.path.join(folder_path, "*.csv"))
                     if not csv_paths:
                         raise ValueError(f"No CSV files found in ais_data_paths folder: {value}")
-                    sampled[key] = csv_paths[int(self.rng.integers(0, len(csv_paths)))]
+                    selected_csv = csv_paths[int(self.rng.integers(0, len(csv_paths)))]
+                    selected_rel = os.path.relpath(selected_csv, os.getcwd()).replace("\\", "/")
+                    sampled[key] = f"/{selected_rel}"
                 elif key == "start":
                     pass  # Deferred: sampled collision-free in sample_single
                 else:
@@ -142,13 +144,16 @@ class ScenarioGenerator:
         return value
 
     def _resolve_data_path(self, data_path: str) -> str:
-        if os.path.isabs(data_path):
+        if os.path.isabs(data_path) and os.path.exists(data_path):
             return data_path
 
+        # Allow portable repo-root style paths such as /data/raw/file.csv.
+        normalized_data_path = data_path.lstrip("/\\")
+
         candidates = [
-            os.path.join(os.getcwd(), data_path),
-            os.path.join(os.path.dirname(self.path_to_config), data_path),
-            os.path.join(os.path.dirname(self.path_to_config), "..", "..", data_path),
+            os.path.join(os.getcwd(), normalized_data_path),
+            os.path.join(os.path.dirname(self.path_to_config), normalized_data_path),
+            os.path.join(os.path.dirname(self.path_to_config), "..", "..", normalized_data_path),
         ]
 
         for candidate in candidates:
