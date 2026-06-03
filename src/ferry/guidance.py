@@ -158,13 +158,17 @@ class TimespaceGuidance(IGuidance):
             p_des = self.traj.get_closest_point(states[1], states[0]) # east-north
             #  'ne_des': (p_des[1], p_des[0])
 
+            x, y, t = self.traj.interpolate(self.traj.progression(states[1], states[0]))
+
             V_des = self.traj.get_speed(elapsed_time)
 
             xy = np.array(self.traj(elapsed_time))
 
             V_command = min(max(0.0, V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]]))), 8.0) 
 
-            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command} | info | {'term': terminated}
+            # print("Delay: ", elapsed_time - t)
+
+            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command, 'delay': elapsed_time - t} | info | {'term': terminated}
 
         # self.prev = {'eta_des': states[0:6], 'nu_des': states[6:12], 'states_des': states, 'info': self.prev['info']}
         return states, {'path': None, 'V_des': None, 'term': terminated} # type:ignore
