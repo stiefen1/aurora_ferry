@@ -44,7 +44,7 @@ class TimespaceGuidance(IGuidance):
             delay_type: Literal['symmetric', 'late', 'early', 'flat'] = 'symmetric',
             corridor_width: float = 0.0,
             simplify_corridor: float = 0.0,
-            new_traj_offset: Optional[float] = 100, #None,
+            new_traj_offset: Optional[float] = 50, #None,
             max_iter: int = 10,
             move_p_0_allowed_after_iter: Optional[int] = 0,
             move_p_f_allowed_after_iter: Optional[int] = None,
