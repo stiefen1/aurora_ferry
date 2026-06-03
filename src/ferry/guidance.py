@@ -50,6 +50,8 @@ class TimespaceGuidance(IGuidance):
             move_p_f_allowed_after_iter: Optional[int] = None,
             smooth_radius: Optional[float] = None,
             kp: float = 0.01,
+            max_shrink_dist_per_step: float = 50.0,
+            shrink_eps: float = 0.1,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
@@ -72,6 +74,8 @@ class TimespaceGuidance(IGuidance):
         self.move_p_f_allowed_after_iter = move_p_f_allowed_after_iter
         self.smooth_radius = smooth_radius
         self.kp = kp
+        self.max_shrink_dist_per_step = max_shrink_dist_per_step
+        self.shrink_eps = shrink_eps
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -128,7 +132,9 @@ class TimespaceGuidance(IGuidance):
                     t0=t1-t0,
                     move_p_0_allowed_after_iter=self.move_p_0_allowed_after_iter,
                     move_p_f_allowed_after_iter=self.move_p_f_allowed_after_iter,
-                    smooth_radius=self.smooth_radius
+                    smooth_radius=self.smooth_radius,
+                    max_shrink_dist_per_step=self.max_shrink_dist_per_step,
+                    shkrink_eps=self.shrink_eps
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")
@@ -156,7 +162,7 @@ class TimespaceGuidance(IGuidance):
 
             xy = np.array(self.traj(elapsed_time))
 
-            V_command = V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]])) 
+            V_command = min(max(0.0, V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]]))), 8.0) 
 
             return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command} | info | {'term': terminated}
 
