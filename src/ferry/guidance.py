@@ -160,13 +160,16 @@ class TimespaceGuidance(IGuidance):
 
             x, y, t = self.traj.interpolate(self.traj.progression(states[1], states[0]))
 
+            delay = elapsed_time - t
+
             V_des = self.traj.get_speed(elapsed_time)
 
             xy = np.array(self.traj(elapsed_time))
 
-            V_command = min(max(0.0, V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]]))), 8.0) 
+            V_command = min(max(0.0, V_des + self.kp * delay), 8.0)
+            # V_command = min(max(0.0, V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]]))), 8.0) 
 
-            # print("Delay: ", elapsed_time - t)
+            print("Delay: ", elapsed_time - t, V_des, V_command)
 
             return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command, 'delay': elapsed_time - t} | info | {'term': terminated}
 
