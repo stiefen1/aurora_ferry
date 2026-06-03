@@ -307,41 +307,47 @@ class ScenarioGenerator:
         for value in node.values():
             self._resolve_failure_times(value, start_sec, duration_sec)
 
-    def sample_single(self, save_path: Optional[str] = None, save: bool = True) -> Dict:
+    def sample_single(self, save_path: Optional[str] = None, save: bool = True, max_pos_iter: int = 1000, max_sample_iter: int = 100) -> Dict:
         save_path = save_path or (self.path_to_config.rsplit(".", 1)[0] + ".json")
         scenario_generation = self.config.get("scenario_generation", self.config)
-        sampled = self._sample_node(scenario_generation)
-        if isinstance(sampled, dict):
-            start_sec, duration_sec = self._attach_simulation_start_time(sampled)
-            # Sample a collision-free start position now that start_sec is known
-            safety_dist = float(scenario_generation.get("safety_distance_at_spawn", 200)) # float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
-            csv_path = self._resolve_data_path(sampled["ais_data_paths"]).replace('raw', 'smooth_interp')
-            excluded_mmsi = {int(v) for v in (sampled.get("mmsi_to_exclude") or [])}
-            ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec, lookahead_sec=30.0)
-            start_cfg = self.config["scenario_generation"]["start"]
-            if self._shore_geom is None:
-                _map = HelsingborgMap()
-                _obs = [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in _map.polygons]
-                self._shore_geom = unary_union([shapely.Polygon(obs.geometry.T) for obs in _obs])
-            locations = {k: v for k, v in start_cfg.items() if k != "info"}
-            loc_name = list(locations.keys())[int(self.rng.integers(0, len(locations)))]
-            ranges = locations[loc_name]
-            pos = None
-            for _ in range(1000):
-                candidate_pos = {
-                    "north": self._sample_range(ranges[0][0], ranges[0][1]),
-                    "east": self._sample_range(ranges[1][0], ranges[1][1]),
-                }
-                if (all(np.hypot(candidate_pos["north"] - tn, candidate_pos["east"] - te) >= (safety_dist + ts_radius)
-                    for tn, te, ts_radius in ts_positions)
-                        and float(shapely.distance(shapely.Point(candidate_pos["north"], candidate_pos["east"]), self._shore_geom)) >= safety_dist):
-                    pos = deepcopy(candidate_pos)
+        sampled = None
+        for _ in range(max_sample_iter):
+            sampled = self._sample_node(scenario_generation)
+            if isinstance(sampled, dict):
+                start_sec, duration_sec = self._attach_simulation_start_time(sampled)
+                # Sample a collision-free start position now that start_sec is known
+                safety_dist = float(scenario_generation.get("safety_distance_at_spawn", 200)) # float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
+                csv_path = self._resolve_data_path(sampled["ais_data_paths"]).replace('raw', 'smooth_interp')
+                excluded_mmsi = {int(v) for v in (sampled.get("mmsi_to_exclude") or [])}
+                ts_positions = self._get_ts_positions_at_time(csv_path, excluded_mmsi, start_sec, lookahead_sec=30.0)
+                start_cfg = self.config["scenario_generation"]["start"]
+                if self._shore_geom is None:
+                    _map = HelsingborgMap()
+                    _obs = [Obstacle(geometry=list(zip(*poly.exterior.coords.xy[::-1]))) for poly in _map.polygons]
+                    self._shore_geom = unary_union([shapely.Polygon(obs.geometry.T) for obs in _obs])
+                locations = {k: v for k, v in start_cfg.items() if k != "info"}
+                loc_name = list(locations.keys())[int(self.rng.integers(0, len(locations)))]
+                ranges = locations[loc_name]
+                pos = None
+                for _ in range(max_pos_iter):
+                    candidate_pos = {
+                        "north": self._sample_range(ranges[0][0], ranges[0][1]),
+                        "east": self._sample_range(ranges[1][0], ranges[1][1]),
+                    }
+                    if (all(np.hypot(candidate_pos["north"] - tn, candidate_pos["east"] - te) >= (safety_dist + ts_radius)
+                        for tn, te, ts_radius in ts_positions)
+                            and float(shapely.distance(shapely.Point(candidate_pos["north"], candidate_pos["east"]), self._shore_geom)) >= safety_dist):
+                        pos = deepcopy(candidate_pos)
+                        break
+                if pos is None:
+                    print(f"No valid pos found after {max_pos_iter} iterations, sampling another node..")
+                else: # Position is valid -> end loop and save
+                    sampled["start"] = pos
+                    self._resolve_failure_times(sampled, start_sec, duration_sec)
+                    sampled.pop("number_of_scenarios", None)
                     break
-            assert pos is not None, f"Failed to find a valid start position ({start_cfg}, {start_sec})"
-            sampled["start"] = pos
-            self._resolve_failure_times(sampled, start_sec, duration_sec)
-            sampled.pop("number_of_scenarios", None)
 
+        assert sampled is not None, f"invalid sample"
         payload = {
             "seed": self.seed,
             "generated_at": datetime.now(tz=timezone.utc).isoformat(),
