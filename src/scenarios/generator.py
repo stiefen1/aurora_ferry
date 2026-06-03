@@ -1,6 +1,7 @@
 """
 Randomly sample an operational domain based on the admissible ranges provided in a yaml file and save it (json)
 """
+from copy import deepcopy
 import pathlib
 from typing import Dict, LiteralString, Optional, Any
 from python_vehicle_simulator.lib.obstacle import Obstacle
@@ -326,14 +327,15 @@ class ScenarioGenerator:
             loc_name = list(locations.keys())[int(self.rng.integers(0, len(locations)))]
             ranges = locations[loc_name]
             pos = None
-            for _ in range(100):
-                pos = {
+            for _ in range(1000):
+                candidate_pos = {
                     "north": self._sample_range(ranges[0][0], ranges[0][1]),
                     "east": self._sample_range(ranges[1][0], ranges[1][1]),
                 }
-                if (all(np.hypot(pos["north"] - tn, pos["east"] - te) >= (safety_dist + ts_radius)
+                if (all(np.hypot(candidate_pos["north"] - tn, candidate_pos["east"] - te) >= (safety_dist + ts_radius)
                     for tn, te, ts_radius in ts_positions)
-                        and float(shapely.distance(shapely.Point(pos["north"], pos["east"]), self._shore_geom)) >= safety_dist):
+                        and float(shapely.distance(shapely.Point(candidate_pos["north"], candidate_pos["east"]), self._shore_geom)) >= safety_dist):
+                    pos = deepcopy(candidate_pos)
                     break
             assert pos is not None, f"Failed to find a valid start position ({start_cfg}, {start_sec})"
             sampled["start"] = pos
