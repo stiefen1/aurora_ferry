@@ -365,8 +365,6 @@ class Camera(ISensor):
     def get_camera_std(self, distance: float | npt.NDArray, visibility: float, illumination: float) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
         """
         Return standard deviation of relative bearing angle (rad) and distance (m) depending on distance and weather.
-
-        Target size is not taken into account for now. 
         """
         sqrt_vis_ill = np.sqrt(visibility * illumination)
         a_gamma = np.deg2rad(1e-7) + np.deg2rad(3e-7) * (1 - sqrt_vis_ill) # To be provided as camera params
@@ -432,24 +430,51 @@ class Camera(ISensor):
         self.np_random, _ = gym.utils.seeding.np_random(seed) # type: ignore
 
 if __name__ == "__main__":
+    """
+    Modify the get_camera_std method (lines 365-376) of Camera class to change the behavior
+    """
     import numpy as np, matplotlib.pyplot as plt, os
+    from matplotlib import cm, colors
     from datetime import timedelta
-    distance = np.linspace(0, 3000, 300)
-    duration = 1000
-    day_str = "2023-04-15" # 2023-04-06
-    t0_str = "11:40:00.000Z" # "05:05:00.000Z"
+
+    # Load camera data -> Actually useless here, but required to instantiate Camera object
+    day_str = "2023-04-03"
+    t0_str = "02:00:00.000Z" 
     t0 = pd.to_datetime(day_str + "T" + t0_str)
+    duration = 1000
     time_window = (t0, t0 + timedelta(seconds=duration))
+    camera = Camera(os.path.join('data', 'smooth_interp', day_str.replace('-', '_') + '_' + t0_str[0:5].replace(':', '_') + '.csv'), t0=time_window[0] - timedelta(hours=2), tf=time_window[1] - timedelta(hours=2))
 
-    camera = Camera(os.path.join('data', 'smooth_interp', day_str.replace('-', '_') + '.csv'), t0=time_window[0], tf=time_window[1])
+    # Relative distances of target ships to be tested
+    distances = np.linspace(0, 3000, 300)
 
-    fig, axs = plt.subplots(1, 2)
-    for w in [(1, 1), (0.7, 0.7), (0.4, 0.4)]:
-        axs[0].plot(distance, np.rad2deg(camera.get_camera_std(distance, *w)[0]), label=f'{w}')
-        axs[1].plot(distance, camera.get_camera_std(distance, *w)[1], label=f'{w}')
+    # Visibility and illumination values to be tested
+    vis_and_illum = set([(1, 1), (0.7, 0.7), (0.4, 0.4), (0.1, 0.1)])
 
-    axs[0].set_title(f"bearing std")
-    axs[1].set_title(f"distance std")
+    # Figure and camp
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6), constrained_layout=True)
+    cmap = plt.get_cmap("viridis")
+    norm = colors.Normalize(vmin=0.0, vmax=1.0)
+
+    # Create plot
+    for v, i in sorted(vis_and_illum):
+        sqrt_vi = float(np.sqrt(v * i))
+        color = cmap(norm(sqrt_vi))
+        axs[0].plot(distances, np.rad2deg(camera.get_camera_std(distances, v, i)[0]), color=color, label=f'(v, i)={v, i}')
+        axs[1].plot(distances, camera.get_camera_std(distances, v, i)[1], color=color, label=f'(v, i)={v, i}')
+        
+    axs[0].set_ylabel("Standard deviation $\\sigma_\\phi$ [°]")
+    axs[0].set_xlabel("Distance to target [m]")
+    axs[0].set_title(f"$\\phi$")
+    axs[0].grid()
+    axs[1].set_xlabel("Distance to target [m]")
+    axs[1].set_ylabel("Standard deviation $\\sigma_d$ [m]")
+    axs[1].set_title(f"$d$")
+    axs[1].grid()
+    fig.suptitle("Standard deviation for measurements of relative angle $\\phi$ and distance (depth) $d$ as a function of visibility (v) and illumination (i)")
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    fig.colorbar(sm, ax=axs, location="right", pad=0.02, label="sqrt(visibility*illumination)")
     plt.legend()
     plt.show()
     
