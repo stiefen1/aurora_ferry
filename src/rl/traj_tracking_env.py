@@ -389,8 +389,6 @@ class TrajTrackingEnv(gym.Env):
         v_current_norm = normalize(np.array([v_current_0]), self.current_speed_range["min"], self.current_speed_range["max"]).astype(np.float32)
         total_mass_norm = normalize(np.array([self.own_vessel.vessel_params.m_tot_estimated]), self.total_mass_range["min"], self.total_mass_range["max"]).astype(np.float32)
 
-        print(rel_target_u_norm.shape, rel_target_v_norm.shape, thruster_speeds_squared_u_norm.shape, thruster_speeds_squared_v_norm.shape)
-
         return {
             "uvr": uvr_norm,
             "rel_target_u": rel_target_u_norm,
@@ -430,7 +428,9 @@ class TrajTrackingEnv(gym.Env):
         else:
             # Used to map normalized observations to actual values (see method get_obs)
             self.uvr_range = {"min": np.array([-10, -10, -10]), "max": np.array([10, 10, 10])}
-            self.rel_target_range = {"min":np.array(self.n_wpts*[0]), "max": np.array(self.n_wpts*[self.path_params['d_tot']])} # relative distance to a point of the horizon
+            
+            # if OS is further than 200 meters away from the target waypoint in u or v, it saturates.
+            self.rel_target_range = {"min":np.array(self.n_wpts*[-200]), "max": np.array(self.n_wpts*[200])} # relative distance to a point of the horizon
             self.speed_error_range = {"min": np.array([-3*self.V_range[1]]), "max": np.array([3*self.V_range[1]])}
             self.thruster_speeds_range = {"min": self.actuators_params.speed_min, "max": self.actuators_params.speed_max}
             self.total_mass_range = {
@@ -453,6 +453,8 @@ class TrajTrackingEnv(gym.Env):
                                   "max": np.array(ranges_config["speed_error_range"]["max"])}
         self.thruster_speeds_range = {"min": np.array(ranges_config["thruster_speeds_range"]["min"]), 
                                       "max": np.array(ranges_config["thruster_speeds_range"]["max"])}
+        self.current_speed_range = {"min": np.array(ranges_config["current_speed_range"]["min"]),
+                                    "max": np.array(ranges_config["current_speed_range"]["max"])}
         self.total_mass_range = {"min": np.array(ranges_config["total_mass_range"]["min"]), 
                                       "max": np.array(ranges_config["total_mass_range"]["max"])}
         
