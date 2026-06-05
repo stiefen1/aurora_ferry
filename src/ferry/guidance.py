@@ -121,7 +121,7 @@ class TimespaceGuidance(IGuidance):
                     (x1, y1),
                     (pf_ne[1], pf_ne[0]),
                     ships_for_projection,
-                    heading=states[5],
+                    heading=states[5] + np.clip(states[11] * self.update_every_sec, -np.deg2rad(60), np.deg2rad(60)),
                     degrees=False,
                     ts_in_TSS=True,
                     good_seamanship=self.good_semanship,
