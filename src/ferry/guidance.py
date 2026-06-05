@@ -52,6 +52,7 @@ class TimespaceGuidance(IGuidance):
             kp: float = 0.01,
             max_shrink_dist_per_step: float = 50.0,
             shrink_eps: float = 0.1,
+            course_rate_integration_factor: float = 1.0,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
@@ -76,6 +77,7 @@ class TimespaceGuidance(IGuidance):
         self.kp = kp
         self.max_shrink_dist_per_step = max_shrink_dist_per_step
         self.shrink_eps = shrink_eps
+        self.course_rate_integration_factor = course_rate_integration_factor
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -121,7 +123,7 @@ class TimespaceGuidance(IGuidance):
                     (x1, y1),
                     (pf_ne[1], pf_ne[0]),
                     ships_for_projection,
-                    heading=states[5] + np.clip(states[11] * self.update_every_sec, -np.deg2rad(60), np.deg2rad(60)),
+                    heading=states[5] + np.clip(states[11] * self.update_every_sec * self.course_rate_integration_factor, -np.deg2rad(60), np.deg2rad(60)),
                     degrees=False,
                     ts_in_TSS=True,
                     good_seamanship=self.good_semanship,
