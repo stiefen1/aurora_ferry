@@ -53,6 +53,7 @@ class TimespaceGuidance(IGuidance):
             max_shrink_dist_per_step: float = 50.0,
             shrink_eps: float = 0.1,
             course_rate_integration_factor: float = 1.0,
+            exponent_v_des_of_iter: float = 3.0,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
@@ -78,6 +79,7 @@ class TimespaceGuidance(IGuidance):
         self.max_shrink_dist_per_step = max_shrink_dist_per_step
         self.shrink_eps = shrink_eps
         self.course_rate_integration_factor = course_rate_integration_factor
+        self.exponent_v_des_of_iter = exponent_v_des_of_iter
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -136,7 +138,8 @@ class TimespaceGuidance(IGuidance):
                     move_p_f_allowed_after_iter=self.move_p_f_allowed_after_iter,
                     smooth_radius=self.smooth_radius,
                     max_shrink_dist_per_step=self.max_shrink_dist_per_step,
-                    shkrink_eps=self.shrink_eps
+                    shkrink_eps=self.shrink_eps,
+                    exponent_v_des_of_iter=self.exponent_v_des_of_iter
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")
