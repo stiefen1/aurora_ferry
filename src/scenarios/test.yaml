@@ -1,55 +1,70 @@
 scenario_generation:
+  changes: ""
   experiment_name: "aurora_ferry_test_scenario_batch"
   description: "Scenario sampling configuration based on odm_training.json"
   seed: 42
-  number_of_scenarios: 6
+  number_of_scenarios: 3
+  safety_distance_at_spawn: 250
 
   simulation:
-    duration_sec: 800
+    duration_sec: 1200
     dt: 0.2
 
   guidance: 
-    update_every_sec: 30
+    update_every_sec: 15
     lookahead_distance: 2000.0
     colregs: true
     good_seamanship: true
     abort_colregs_after_iter: 3
-    max_course_rate: 0.5
+    max_course_rate: 0.2
     buffer_target_ships: 100.0
     trim_path: 600.0
     term_dist: 200.0
-    dchi: 5.0
-    du: 0.1
-    delay: 5
+    dchi: 7.5
+    du: 0.5
+    delay: 2.0
     delay_type: 'symmetric'
     corridor_width: 80
     simplify_corridor: 1
     max_iter: 10
     move_p_0_allowed_after_iter: 0
-    move_p_f_allowed_after_iter: 9
+    move_p_f_allowed_after_iter: 8
     smooth_radius: 200.0
+    kp: 0.1
+    max_shrink_dist_per_step: 50.0
+    shrink_eps: 0.1
+    new_traj_offset: 75.0
+    course_rate_integration_factor: 0.0
+    exponent_v_des_of_iter: 1.0
+
 
   navigation:
-    q_tt: [1, 1, 0.01, 0.0003]
+    q_tt: [0.1, 0.1, 0.001, 0.0003]
     r_ais: [10, 10, 0.04, 0.00122]
     r_camera: [0.00008, 640000]
+    ground_truth_target_ships: true
+    ground_truth_update_every_sec: 1
+    distance_threshold_target_tracking: 2000.0
 
   control:
-    path_to_weights: 'models/sac/2026_05_22_15_10_57'
+    path_to_weights: 'models/sac/2026_06_01_20_00_06'
     algorithm: 'sac'
 
   ais_data_paths: "data/raw"
 
   mmsi_to_exclude: [265041000]
 
-  start: ["Helsingborg", "Helsingor"]
+  start:
+    Helsingor: [[6212200, 6212700], [351800, 352000]] # 6212309, 351458
+    Helsingborg: [[6212600, 6213300], [355700, 356000]] # 6213303, 356200
+    info: "Each start position is associated with ranges for possible east-north values"
 
   operational_domain:
     ferry:
       target_speed:
-        min: 6.5
+        min: 5
         max: 7.5
-        mean: 7.0
+        mean: 6.5
         std: 1
       mass: 2250000
       passengers:
@@ -77,7 +92,7 @@ scenario_generation:
         max: 3.14159
         ornstein_uhlenbeck:
           attraction: 0.03
-          amplitude: 0.05
+          amplitude: 0.03
       speed:
         min: 0.0
         max: 15.0
@@ -92,7 +107,7 @@ scenario_generation:
         max: 3.14159
         ornstein_uhlenbeck:
           attraction: 0.01
-          amplitude: 0.05
+          amplitude: 0.01
       speed:
         min: 0.0
         max: 1.0

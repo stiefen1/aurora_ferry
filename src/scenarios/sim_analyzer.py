@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 
 from python_vehicle_simulator.lib.obstacle import Obstacle
@@ -73,6 +73,7 @@ class SimAnalyzer:
         fig_pos_est_error, ax_pos_est_error = plt.subplots()
         fig_tt, ax_tt = plt.subplots()
         fig_power, ax_power = plt.subplots()
+        fig_delay, ax_delay = plt.subplots()
 
         # High-level graphs
         fig_ts_dist_vs_tt, ax_ts_dist_vs_tt = plt.subplots()
@@ -80,6 +81,7 @@ class SimAnalyzer:
         fig_ts_dist_vs_yaw_tt, ax_ts_dist_vs_yaw_tt = plt.subplots()
 
         run_summaries: List[Dict] = []
+        plotted_delay_half_widths: set[float] = set()
 
         print("Analyzing results..")
         for i, (config, sim) in enumerate(tqdm(zip(self.config, self.sim), total=len(self.config))):
@@ -175,6 +177,17 @@ class SimAnalyzer:
             )
             ax_power.plot(sim["x"]["time"], sim["power_cons"]["azimuth"] + sim["power_cons"]["thrust"], color=color)
 
+            ## Guidance delay
+            delay_time = np.asarray(sim["delay"]["time"], dtype=float)
+            delay_data = np.asarray(sim["delay"]["data"], dtype=float).reshape(-1)
+            ax_delay.plot(delay_time, delay_data, color=color, alpha=0.8)
+
+            delay_half_width = abs(float(scenario_generation["guidance"]["delay"]))
+            if delay_half_width not in plotted_delay_half_widths:
+                ax_delay.axhline(-delay_half_width, color="black", linestyle="--", linewidth=1.0)
+                ax_delay.axhline(delay_half_width, color="black", linestyle="--", linewidth=1.0)
+                plotted_delay_half_widths.add(delay_half_width)
+
             # Collect mission-level summary for report.
             buffer_dist = float(scenario_generation["guidance"]["buffer_target_ships"])
             min_dist_shore = float(np.min(sim["distance_to_shore"]))
@@ -218,6 +231,8 @@ class SimAnalyzer:
         ax_tt.set_xlabel("time [s]")
         ax_tt.set_ylabel("NE error norm [m]")
         ax_os_traj.set_aspect('equal')
+        ax_delay.set_xlabel("time [s]")
+        ax_delay.set_ylabel("delay [s]")
 
 
         path_to_figures = os.path.join(self.path_to_dir, "figures")
@@ -231,6 +246,7 @@ class SimAnalyzer:
         fig_pos_est_error.savefig(os.path.join(path_to_figures, "pos_est_error.png"))
         fig_tt.savefig(os.path.join(path_to_figures, "target_tracking.png"))
         fig_power.savefig(os.path.join(path_to_figures, "power.png"))
+        fig_delay.savefig(os.path.join(path_to_figures, "delay.png"))
         fig_ts_dist_vs_tt.savefig(os.path.join(path_to_figures, "ts_dist_vs_tt.png"))
         fig_ts_tt_vs_visill.savefig(os.path.join(path_to_figures, "ts_tt_vs_visill.png"))
         fig_ts_dist_vs_yaw_tt.savefig(os.path.join(path_to_figures, "ts_dist_vs_yaw_tt.png"))
@@ -465,7 +481,7 @@ class SimAnalyzer:
         return cumulative_distance
 
 
-    def distance_to_ts(self, states: Dict, path_to_csv: str, time_window: Tuple[datetime.datetime, datetime.datetime], dt: float, mmsi_to_exclude: List[int]) -> Dict:
+    def distance_to_ts(self, states: Dict, path_to_csv: str, time_window: Tuple[datetime.datetime, datetime.datetime], dt: float, mmsi_to_exclude: List[int]) -> Dict[int, List[Optional[float]]]:
         """
         Compute distance w.r.t each target ship in ts_data at each timestep and output a dictionnary
         of trajectories indexed by mmsi. If no data is available for a specific timestamp, set distance to None.
@@ -515,7 +531,7 @@ class SimAnalyzer:
 
         ais_df = ais_df[[mmsi_col, "timestamp", "north", "east"]].dropna().sort_values("timestamp")
 
-        distances: Dict[int, List[float]] = {}
+        distances: Dict[int, List[Optional[float]]] = {}
         tolerance = pd.Timedelta(seconds=time_tolerance)
 
         for mmsi, vessel_df in ais_df.groupby(mmsi_col, sort=False):
@@ -532,7 +548,8 @@ class SimAnalyzer:
             valid = np.isfinite(d)
 
             if np.any(valid):
-                distances[int(mmsi)] = [float(di) if vi else None for di, vi in zip(d, valid)]
+                mmsi_int = int(np.asarray(mmsi).item())
+                distances[mmsi_int] = [float(di) if vi else None for di, vi in zip(d, valid)]
 
         return distances
 
@@ -550,11 +567,25 @@ class SimAnalyzer:
         navigation_states_npz = np.load(os.path.join(folder, "navigation_states.npz"), allow_pickle=True)
         guidance_states_des_npz = np.load(os.path.join(folder, "guidance_states_des.npz"), allow_pickle=True)
 
+        guidance_delay_npz = None
+        guidance_delay_path = os.path.join(folder, "guidance_delay.npz")
+        if os.path.exists(guidance_delay_path):
+            guidance_delay_npz = np.load(guidance_delay_path, allow_pickle=True)
+
+        if guidance_delay_npz is None:
+            delay_data = {
+                "time": np.array([], dtype=np.float64),
+                "data": np.array([], dtype=np.float64),
+            }
+        else:
+            delay_data = {k: guidance_delay_npz[k] for k in guidance_delay_npz.files}
+
         data = {
             "u": {k:control_u_npz[k] for k in control_u_npz.files},
             "x": {k:navigation_actual_states_npz[k] for k in navigation_actual_states_npz.files},
             "x_est": {k:navigation_states_npz[k] for k in navigation_states_npz.files},
             "x_des": {k:guidance_states_des_npz[k] for k in guidance_states_des_npz.files},
+            "delay": delay_data,
             "ts_est": ts_est
         }
 
@@ -562,6 +593,8 @@ class SimAnalyzer:
         navigation_actual_states_npz.close()
         navigation_states_npz.close()
         guidance_states_des_npz.close()
+        if guidance_delay_npz is not None:
+            guidance_delay_npz.close()
 
 
         return data
@@ -570,6 +603,6 @@ class SimAnalyzer:
 if __name__ == "__main__":
     import os
     # path_to_data = os.path.join("sim_data", "test") 
-    path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs"
+    path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs_no_traj_offset_low_kp_high_dudchi_no_course_rate"
     analyzer = SimAnalyzer(path_to_data)
     analyzer()

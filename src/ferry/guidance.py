@@ -174,7 +174,7 @@ class TimespaceGuidance(IGuidance):
             V_command = min(max(0.0, V_des + self.kp * delay), 8.0)
             # V_command = min(max(0.0, V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]]))), 8.0) 
 
-            print("Delay: ", elapsed_time - t, V_des, V_command)
+            # print("Delay: ", elapsed_time - t, V_des, V_command)
 
             return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command, 'delay': elapsed_time - t} | info | {'term': terminated}
 

@@ -253,6 +253,7 @@ class NavigationAurora(INavigation):
                 # Vessel is already being tracked
                 measurement = np.array([vessel.north, vessel.east, knot_to_m_per_sec(vessel.sog), np.deg2rad(vessel.cog)]) # Target vessel pose estimation relies on our own state estimation
                     
+                # print(vessel.name, np.linalg.norm(states[0:2] - np.array([vessel.north, vessel.east])))
                 if vessel.mmsi in self.target_collection:
                     tracked_target = self.target_collection[vessel.mmsi]
                     tracked_target.vessel = deepcopy(vessel) # update vessel data

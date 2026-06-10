@@ -189,6 +189,19 @@ class SimLauncher:
         x_des = np.array([e for i, e in enumerate(x_des) if i in valid_indices])
         t_x_des = np.take(t_x_des, valid_indices)
 
+        # Guidance delay
+        delay_out = sim._extract_data_from_path('guidance.info.delay')
+        t_delay = np.array([], dtype=float)
+        delay_values = np.array([], dtype=float)
+        t_delay_raw, delay_raw, valid_indices, y_index_from_path = delay_out
+        delay_values_obj = np.asarray([d for i, d in enumerate(delay_raw) if i in valid_indices], dtype=object)
+        t_delay_obj = np.asarray(np.take(t_delay_raw, valid_indices), dtype=object)
+
+        valid_delay = np.array([d is not None for d in delay_values_obj], dtype=bool)
+        if np.any(valid_delay):
+            delay_values = np.asarray(delay_values_obj[valid_delay], dtype=np.float64)
+            t_delay = np.asarray(t_delay_obj[valid_delay], dtype=np.float64)
+
         # Estimated states
         t_x_est, x_est, valid_indices, y_index_from_path = sim._extract_data_from_path('navigation.states')
         x_est = np.array([e for i, e in enumerate(x_est) if i in valid_indices])
@@ -245,6 +258,8 @@ class SimLauncher:
             np.savez_compressed(os.path.join(out_dir, file_name), time=time_data, data=data)
 
         save_array_npz(t_x_des, x_des, "guidance_states_des.npz")
+        if delay_values.size > 0:
+            save_array_npz(t_delay, delay_values, "guidance_delay.npz")
         save_array_npz(t_x_est, x_est, "navigation_states.npz")
         save_array_npz(t_u, u, "control_u.npz")
         save_array_npz(t_x, x, "navigation_actual_states.npz")
