@@ -53,8 +53,8 @@ scenario_generation:
     ferry:
       target_speed:
         min: 0.0
-        max: 8.0
-        mean: 6.5
+        max: 7.5
+        mean: 5.5
         std: 2
       mass: 2250000
       passengers:

@@ -78,12 +78,6 @@ class RLTrajTrackingController(IControl, ABC):
                                      "max": np.array(ranges_config["azimuth_angles_sin_range"]["max"])}
         self.thruster_speeds_range = {"min": np.array(ranges_config["thruster_speeds_range"]["min"]), 
                                       "max": np.array(ranges_config["thruster_speeds_range"]["max"])}
-        self.rel_wind_speed_range = {"min": np.array(ranges_config["rel_wind_speed_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_wind_speed_range"]["max"])}
-        self.rel_wind_angle_cos_range = {"min": np.array(ranges_config["rel_wind_angle_cos_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_wind_angle_cos_range"]["max"])}
-        self.rel_wind_angle_sin_range = {"min": np.array(ranges_config["rel_wind_angle_sin_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_wind_angle_sin_range"]["max"])}
         self.rel_current_speed_range = {"min": np.array(ranges_config["rel_current_speed_range"]["min"]), 
                                       "max": np.array(ranges_config["rel_current_speed_range"]["max"])}
         self.rel_current_angle_cos_range = {"min": np.array(ranges_config["rel_current_angle_cos_range"]["min"]), 
@@ -96,7 +90,7 @@ class RLTrajTrackingController(IControl, ABC):
         # Load environment parameters
         self.action_repeat = ranges_config["action_repeat"]
         self.dt = ranges_config["dt"]
-        self.wpts_space_multiplicator = ranges_config["wpts_space_multiplicator"]
+        self.dist_between_target_wpts = ranges_config["dist_between_target_wpts"]
         self.n_wpts = ranges_config["n_wpts"]
         self.counter: int = self.action_repeat - 1
 
@@ -112,14 +106,13 @@ class RLTrajTrackingController(IControl, ABC):
         """
         pass
 
-    def _get_obs(self, states: np.ndarray, current: Current, wind: Wind, obstacles: List[Obstacle], target_vessels: List, path: PWLPath, V_des: float, m_tot_estimated: float, *args, **kwargs) -> npt.NDArray:
+    def _get_obs(self, states: np.ndarray, current: Current, wind: Wind, obstacles: List[Obstacle], target_vessels: List, path: PWLPath, V_des: List[float], m_tot_estimated: float, *args, **kwargs) -> npt.NDArray:
         """
         Convert internal state to normalized observation format.
         
         Returns:
             Dict: Normalized observations with keys 'ne', 'uvr', 'rel_target', 'rel_yaw'
         """
-        u_wind_0, v_wind_0 = wind.uv0(states[5])
         u_current_0, v_current_0 = current.uv0(states[5])
 
         # Extract elements of observation space
@@ -130,11 +123,8 @@ class RLTrajTrackingController(IControl, ABC):
         yaw = eta[5]
         azimuth_angles = states[12:16]  # The outcome of a thruster depends on the azimuth angle -> it's probably needed here
         thruster_speeds = states[16:20]
-        uv_wind_rel_0 = np.array([u_wind_0, v_wind_0]) - nu[0:2]
         uv_current_rel_0 = np.array([u_current_0, v_current_0]) - nu[0:2]
-        rel_wind_angle_0 = ssa(np.atan2(uv_wind_rel_0[1], uv_wind_rel_0[0]))
         rel_current_angle_0 = ssa(np.atan2(uv_current_rel_0[1], uv_current_rel_0[0]))
-        rel_wind_norm_0 = np.linalg.norm(uv_wind_rel_0)
         rel_current_norm_0 = np.linalg.norm(uv_current_rel_0)
  
         # Compute distances and yaw angles relative to target waypoints
@@ -143,7 +133,7 @@ class RLTrajTrackingController(IControl, ABC):
         self.targets = path.get_target_wpts_from( # type: ignore
             ne[0],
             ne[1],
-            self.action_repeat*self.dt*V_des*self.wpts_space_multiplicator,
+            self.dist_between_target_wpts,
             self.n_wpts
         )
 
@@ -160,13 +150,10 @@ class RLTrajTrackingController(IControl, ABC):
         rel_target_norm = normalize(np.array(distances), self.rel_target_range["min"], self.rel_target_range["max"]).astype(np.float32)
         rel_yaws_cos_norm = normalize(np.array(rel_yaws_cos), self.rel_yaw_cos_range["min"], self.rel_yaw_cos_range["max"]).astype(np.float32)
         rel_yaws_sin_norm = normalize(np.array(rel_yaws_sin), self.rel_yaw_sin_range["min"], self.rel_yaw_sin_range["max"]).astype(np.float32)
-        speed_error_norm = normalize(np.array([np.linalg.norm(uvr[0:2]) - V_des]), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
+        speed_error_norm = normalize(np.linalg.norm(uvr[0:2]) - np.array(V_des), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
         azimuth_angles_cos_norm = normalize(np.cos(azimuth_angles), self.azimuth_angles_cos_range["min"], self.azimuth_angles_cos_range["max"]).astype(np.float32)
         azimuth_angles_sin_norm = normalize(np.sin(azimuth_angles), self.azimuth_angles_sin_range["min"], self.azimuth_angles_sin_range["max"]).astype(np.float32)
         thruster_speeds_norm = normalize(thruster_speeds, self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]).astype(np.float32)
-        rel_wind_speed_norm = normalize(np.array([rel_wind_norm_0]), self.rel_wind_speed_range["min"], self.rel_wind_speed_range["max"]).astype(np.float32)
-        rel_wind_angle_cos_norm = normalize(np.array(np.cos(rel_wind_angle_0)), self.rel_wind_angle_cos_range["min"], self.rel_wind_angle_cos_range["max"]).astype(np.float32)
-        rel_wind_angle_sin_norm = normalize(np.array(np.sin(rel_wind_angle_0)), self.rel_wind_angle_sin_range["min"], self.rel_wind_angle_sin_range["max"]).astype(np.float32)
         rel_current_speed_norm = normalize(np.array([rel_current_norm_0]), self.rel_current_speed_range["min"], self.rel_current_speed_range["max"]).astype(np.float32)
         rel_current_angle_cos_norm = normalize(np.array(np.cos(rel_current_angle_0)), self.rel_current_angle_cos_range["min"], self.rel_current_angle_cos_range["max"]).astype(np.float32)
         rel_current_angle_sin_norm = normalize(np.array(np.sin(rel_current_angle_0)), self.rel_current_angle_sin_range["min"], self.rel_current_angle_sin_range["max"]).astype(np.float32)
@@ -182,9 +169,6 @@ class RLTrajTrackingController(IControl, ABC):
             "azimuth_angles_cos": azimuth_angles_cos_norm,
             "azimuth_angles_sin": azimuth_angles_sin_norm,
             "thruster_speeds": thruster_speeds_norm,
-            "rel_wind_speed": rel_wind_speed_norm,
-            "rel_wind_angle_cos": rel_wind_angle_cos_norm,
-            "rel_wind_angle_sin": rel_wind_angle_sin_norm,
             "rel_current_speed": rel_current_speed_norm,
             "rel_current_angle_cos": rel_current_angle_cos_norm,
             "rel_current_angle_sin": rel_current_angle_sin_norm,
