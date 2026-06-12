@@ -62,7 +62,6 @@ class TrajTrackingEnv(gym.Env):
             action_repeat: int = 10,
             path_to_obs_ranges: Optional[str] = None,
             path_to_config: LiteralString = DEFAULT_PATH_TO_CONFIG,
-            dist_between_target_wpts: float = 70.0,
     ):
         """
         Gymnasium navigation environment for vessel control.
@@ -82,7 +81,6 @@ class TrajTrackingEnv(gym.Env):
         self.path_params = path_params
         self.n_wpts = n_wpts
         self.wpts_space_multiplicator = wpts_space_multiplicator
-        self.dist_between_target_wpts = dist_between_target_wpts
         self.initial_angle_range = initial_angle_range
         self.odm = ODM(src=path_to_config)
 
@@ -362,7 +360,7 @@ class TrajTrackingEnv(gym.Env):
         return self.path.get_target_wpts_from( # type: ignore
             self.own_vessel.states[0],
             self.own_vessel.states[1],
-            self.dist_between_target_wpts,
+            self.action_repeat*self.dt*self.wpts_space_multiplicator*self.V_des[0],
             self.n_wpts
         )
 
@@ -512,8 +510,8 @@ class TrajTrackingEnv(gym.Env):
         # Load environment parameters
         self.action_repeat = ranges_config["action_repeat"]
         self.dt = ranges_config["dt"]
-        self.dist_between_target_wpts = ranges_config["dist_between_target_wpts"]
         self.n_wpts = ranges_config["n_wpts"]
+        self.wpts_space_multiplicator = ranges_config["wpts_space_multiplicator"]
         print(f"Loaded observation space ranges from {path}")
 
 
@@ -569,7 +567,7 @@ class TrajTrackingEnv(gym.Env):
             },
             "action_repeat": self.action_repeat,
             "dt": self.dt,
-            "dist_between_target_wpts": self.dist_between_target_wpts,
+            "wpts_space_multiplicator": self.wpts_space_multiplicator,
             "n_wpts": self.n_wpts
         }
         
