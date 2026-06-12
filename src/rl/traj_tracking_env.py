@@ -41,7 +41,7 @@ DEFAULT_PATH_TO_CONFIG = os.path.join("src", "rl", "training.yaml")
 DEFAULT_CENTER_NE = (0, 0) # (6.212e6, 351900.0)
 
 DEFAULT_PATH_PARAMS = {
-    "d_tot": 10000, "max_turn_deg": 60, "seg_len_range":(200, 1000), "start":DEFAULT_CENTER_NE, "N":1
+    "d_tot": 10000, "max_turn_deg": 80, "seg_len_range":(200, 300), "start":DEFAULT_CENTER_NE, "N":1
 }
 
 class TrajTrackingEnv(gym.Env):
