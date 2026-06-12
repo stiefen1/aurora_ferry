@@ -22,7 +22,7 @@ scenario_generation:
     du: 0.1
     delay: 5
     delay_type: 'symmetric'
-    corridor_width: 60
+    corridor_width: 80
     simplify_corridor: 1
     max_iter: 10
     move_p_0_allowed_after_iter: 0

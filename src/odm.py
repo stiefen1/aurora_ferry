@@ -11,6 +11,7 @@ class ODM:
     wind: Dict = field(default_factory=dict)
     current: Dict = field(default_factory=dict)
     sensors: Dict = field(default_factory=dict)
+    guidance: Dict= field(default_factory=dict)
     src: Optional[str] = field(default=None, init=True, repr=False)
 
     def __post_init__(self):
@@ -42,6 +43,7 @@ class ODM:
         self.wind = self._convert_to_numpy(data["operational_domain"].get('wind', {})) # type:ignore
         self.current = self._convert_to_numpy(data["operational_domain"].get('current', {})) # type:ignore
         self.sensors = self._convert_to_numpy(data.get('sensors', {})) # type:ignore
+        self.guidance = self._convert_to_numpy(data.get('guidance', {})) # type:ignore
 
     def from_json(self, src: str) -> None:
         """Load ODM parameters from JSON file"""
@@ -56,6 +58,7 @@ class ODM:
         self.wind = self._convert_to_numpy(data.get('wind', {})) # type:ignore
         self.current = self._convert_to_numpy(data.get('current', {})) # type:ignore
         self.sensors = self._convert_to_numpy(data.get('sensors', {})) # type:ignore
+        self.guidance = self._convert_to_numpy(data.get('guidance', {})) # type:ignore
 
     def _convert_to_numpy(self, obj):
         """Recursively convert all values in nested dict/list structure to numpy arrays"""
@@ -84,6 +87,8 @@ class ODM:
             data['current'] = self._convert_from_numpy(self.current)
         if self.sensors:
             data['sensors'] = self._convert_from_numpy(self.sensors)
+        if self.guidance:
+            data['guidance'] = self._convert_from_numpy(self.guidance)
         
         # Ensure directory exists
         os.makedirs(os.path.dirname(os.path.abspath(src)), exist_ok=True)

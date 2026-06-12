@@ -91,6 +91,7 @@ class TrajTrackingEnv(gym.Env):
         self.current_speed_range = self.odm.current["speed"]
         self.current_angle_range = self.odm.current["angle"]
         self.V_range = tuple(self.odm.ferry["target_speed"].values())
+        self.corridor_width = self.odm.guidance["corridor_width"]
 
         self.init_action_space()
         self.init_observation_space(path_to_ranges=path_to_obs_ranges)
@@ -141,12 +142,12 @@ class TrajTrackingEnv(gym.Env):
         # print(f"{self.own_vessel.vessel_params.m_tot_estimated:.1f} in [{self.total_mass_range["min"]:.1f}; {self.total_mass_range["max"]:.1f}] ?")
         # 351900.0, 6.212e6
         # self.map_bounds
-        x_init_min = np.array([-100+DEFAULT_CENTER_NE[0], -100+DEFAULT_CENTER_NE[1], 0, 0, 0, -np.pi, 
-                               -self.V_range[1], -self.V_range[1]/10, 0, 0, 0, -0.1,
+        x_init_min = np.array([-0.8 * self.corridor_width/2+DEFAULT_CENTER_NE[0], -0.8 * self.corridor_width/2+DEFAULT_CENTER_NE[1], 0, 0, 0, -np.pi, 
+                               -self.V_range[1]/10, -self.V_range[1]/10, 0, 0, 0, -0.1,
                                *self.actuators_params.alpha_min,
                                *self.thruster_speeds_range["min"]])
-        x_init_max = np.array([100+DEFAULT_CENTER_NE[0], 100+DEFAULT_CENTER_NE[1], 0, 0, 0, np.pi, 
-                               self.V_range[1], self.V_range[1]/10, 0, 0, 0, 0.1,
+        x_init_max = np.array([0.8 * self.corridor_width/2+DEFAULT_CENTER_NE[0], 0.8 * self.corridor_width/2+DEFAULT_CENTER_NE[1], 0, 0, 0, np.pi, 
+                               self.V_range[1]/10, self.V_range[1]/10, 0, 0, 0, 0.1,
                                *self.actuators_params.alpha_max,
                                *self.thruster_speeds_range["max"]])
         
@@ -235,7 +236,7 @@ class TrajTrackingEnv(gym.Env):
         observation = self._get_obs()
 
         # Check for collisions
-        terminated = self.collision()
+        terminated = self.collision() or self.corridor_exit()
 
         # We don't use truncation in this simple environment
         # (could add a step limit here if desired)
@@ -252,6 +253,9 @@ class TrajTrackingEnv(gym.Env):
         self.prev_states = self.own_vessel.states.copy()
 
         return observation, reward, terminated, truncated, info
+
+    def corridor_exit(self) -> bool:
+        return (self.dist_to_target() > (self.corridor_width / 2.0))
 
     def update_target_speed(self) -> None:
         target_wpts = self.get_target_wpts()
