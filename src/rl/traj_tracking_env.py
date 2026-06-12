@@ -267,7 +267,6 @@ class TrajTrackingEnv(gym.Env):
         Init all target speeds along the path beforehand, to input target speed at next local waypoint into observation space
         """
         n_global_wpts = self.straight_path.waypoints.shape[0]
-        print(self.straight_path.waypoints.shape, self.path.waypoints.shape)
         self.V_des_along_path = np.clip(
             self.np_random.normal(
                 desired_speed, 
@@ -277,6 +276,7 @@ class TrajTrackingEnv(gym.Env):
             self.V_range[0],
             self.V_range[1]
         )
+        self.V_des = [self.V_des_along_path[0]]
 
     # def sample_new_target_speed(self) -> None:
     #     self.V_des = float(
