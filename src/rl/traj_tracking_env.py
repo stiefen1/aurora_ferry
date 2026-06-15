@@ -462,7 +462,7 @@ class TrajTrackingEnv(gym.Env):
         else:
             # Used to map normalized observations to actual values (see method get_obs)
             self.uvr_range = {"min": np.array([-10, -10, -10]), "max": np.array([10, 10, 10])}
-            self.rel_target_range = {"min":np.array(self.n_wpts*[0]), "max": np.array(self.n_wpts*[self.corridor_width/2.0])} # relative distance to a point of the horizon
+            self.rel_target_range = {"min":np.array(self.n_wpts*[0]), "max": np.array(self.n_wpts*[1000.0])} # relative distance to a point of the horizon
             self.rel_yaw_range = {"min": np.array(self.n_wpts*[-np.pi]), "max": np.array(self.n_wpts*[np.pi])}
             self.speed_error_range = {"min": np.array([-3*self.V_range[1]]), "max": np.array([3*self.V_range[1]])}
             self.azimuth_angles_range = {"min": self.actuators_params.alpha_min, "max": self.actuators_params.alpha_max}
