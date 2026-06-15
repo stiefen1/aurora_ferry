@@ -303,6 +303,16 @@ class TrajTrackingEnv(gym.Env):
                 1 + 6*np.exp(-20*p)
                 )
             )
+    
+    def eval(self) -> Dict:
+        """
+        Evaluate current performance of the RL agent
+        """
+        d = self.dist_to_target()
+        se = self.speed_error()
+        p_a = np.linalg.norm(self.own_vessel.states[12:16] - self.prev_states[12:16])**2
+        p_n = np.linalg.norm(self.own_vessel.states[16:20])**2
+        return {'distance': d, 'speed_error': se, 'thruster_power_cons': p_n, 'azimuth_power_cons': p_a}
 
         # return np.exp(-d/100) + np.exp(-se/2.0) + np.exp(-100*p) # 1st try -> static
         # return 2*np.exp(-d/100) + 2*np.exp(-se/2.0) + np.exp(-100*p) # 2nd try -> almost static
