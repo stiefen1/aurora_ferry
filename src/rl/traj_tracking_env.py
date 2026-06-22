@@ -391,8 +391,6 @@ class TrajTrackingEnv(gym.Env):
         azimuth_angles = states[12:16]  # The outcome of a thruster depends on the azimuth angle -> it's probably needed here
         thruster_speeds = states[16:20]
         uv_current_rel_0 = np.array([u_current_0, v_current_0]) - nu[0:2]
-        rel_current_angle_0 = ssa(np.atan2(uv_current_rel_0[1], uv_current_rel_0[0]))
-        rel_current_norm_0 = np.linalg.norm(uv_current_rel_0)
  
         # Compute distances and yaw angles relative to target waypoints
         distances = []
@@ -426,9 +424,8 @@ class TrajTrackingEnv(gym.Env):
         speed_error_norm = normalize(np.linalg.norm(uvr[0:2]) - np.array(self.V_des), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
         azimuth_angles_norm = normalize(azimuth_angles, self.azimuth_angles_range["min"], self.azimuth_angles_range["max"]).astype(np.float32)
         thruster_speeds_norm = normalize(thruster_speeds, self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]).astype(np.float32)
-        rel_current_speed_norm = normalize(np.array([rel_current_norm_0]), self.rel_current_speed_range["min"], self.rel_current_speed_range["max"]).astype(np.float32)
-        rel_current_angle_cos_norm = normalize(np.array(np.cos(rel_current_angle_0)), self.rel_current_angle_cos_range["min"], self.rel_current_angle_cos_range["max"]).astype(np.float32)
-        rel_current_angle_sin_norm = normalize(np.array(np.sin(rel_current_angle_0)), self.rel_current_angle_sin_range["min"], self.rel_current_angle_sin_range["max"]).astype(np.float32)
+        rel_current_u_norm = normalize(uv_current_rel_0[0], self.rel_current_u_range["min"], self.rel_current_u_range["max"]).astype(np.float32)
+        rel_current_v_norm = normalize(uv_current_rel_0[1], self.rel_current_v_range["min"], self.rel_current_v_range["max"]).astype(np.float32)
         total_mass_norm = normalize(np.array([self.own_vessel.vessel_params.m_tot_estimated]), self.total_mass_range["min"], self.total_mass_range["max"]).astype(np.float32)
 
         return {
@@ -438,9 +435,8 @@ class TrajTrackingEnv(gym.Env):
             "speed_error": speed_error_norm,
             "azimuth_angles": azimuth_angles_norm,
             "thruster_speeds": thruster_speeds_norm,
-            "rel_current_speed": rel_current_speed_norm,
-            "rel_current_angle_cos": rel_current_angle_cos_norm,
-            "rel_current_angle_sin": rel_current_angle_sin_norm,
+            "rel_current_u": rel_current_u_norm,
+            "rel_current_v": rel_current_v_norm,
             "total_mass": total_mass_norm
         }
 
@@ -460,9 +456,8 @@ class TrajTrackingEnv(gym.Env):
                 "speed_error": gym.spaces.Box(-1.0, 1.0, shape=(self.n_wpts,)),
                 "azimuth_angles": gym.spaces.Box(-1.0, 1.0, shape=(4,)),
                 "thruster_speeds": gym.spaces.Box(-1.0, 1.0, shape=(4,)),
-                "rel_current_speed": gym.spaces.Box(-1.0, 1.0, shape=(1,)),
-                "rel_current_angle_cos": gym.spaces.Box(-1.0, 1.0, shape=(1,)),
-                "rel_current_angle_sin": gym.spaces.Box(-1.0, 1.0, shape=(1,)),
+                "rel_current_u": gym.spaces.Box(-1.0, 1.0, shape=(1,)),
+                "rel_current_v": gym.spaces.Box(-1.0, 1.0, shape=(1,)),
                 "total_mass": gym.spaces.Box(-1.0, 1.0, shape=(1,))
             }
         )
@@ -477,9 +472,8 @@ class TrajTrackingEnv(gym.Env):
             self.speed_error_range = {"min": np.array([-3*self.V_range[1]]), "max": np.array([3*self.V_range[1]])}
             self.azimuth_angles_range = {"min": self.actuators_params.alpha_min, "max": self.actuators_params.alpha_max}
             self.thruster_speeds_range = {"min": self.actuators_params.speed_min, "max": self.actuators_params.speed_max}
-            self.rel_current_angle_cos_range = {"min": np.array([-1.0]), "max": np.array([1.0])}
-            self.rel_current_angle_sin_range = {"min": np.array([-1.0]), "max": np.array([1.0])}
-            self.rel_current_speed_range = {"min": np.array([0.0]), "max": np.array([self.current_speed_range["max"] + self.V_range[1]])}
+            self.rel_current_u_range = {"min": -np.array([self.current_speed_range["max"] + self.V_range[1]]), "max": np.array([self.current_speed_range["max"] + self.V_range[1]])}
+            self.rel_current_v_range = {"min": -np.array([self.current_speed_range["max"] + self.V_range[1]]), "max": np.array([self.current_speed_range["max"] + self.V_range[1]])}
             self.total_mass_range = {
                 "min": np.array(self.odm.ferry["mass"]),
                 "max": np.array(self.odm.ferry["mass"] + \
@@ -504,12 +498,10 @@ class TrajTrackingEnv(gym.Env):
                                      "max": np.array(ranges_config["azimuth_angles_range"]["max"])}
         self.thruster_speeds_range = {"min": np.array(ranges_config["thruster_speeds_range"]["min"]), 
                                       "max": np.array(ranges_config["thruster_speeds_range"]["max"])}
-        self.rel_current_speed_range = {"min": np.array(ranges_config["rel_current_speed_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_speed_range"]["max"])}
-        self.rel_current_angle_cos_range = {"min": np.array(ranges_config["rel_current_angle_cos_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_angle_cos_range"]["max"])}
-        self.rel_current_angle_sin_range = {"min": np.array(ranges_config["rel_current_angle_sin_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_angle_sin_range"]["max"])}
+        self.rel_current_u_range = {"min": np.array(ranges_config["rel_current_u_range"]["min"]), 
+                                      "max": np.array(ranges_config["rel_current_u_range"]["max"])}
+        self.rel_current_v_range = {"min": np.array(ranges_config["rel_current_v_range"]["min"]), 
+                                      "max": np.array(ranges_config["rel_current_v_range"]["max"])}
         self.total_mass_range = {"min": np.array(ranges_config["total_mass_range"]["min"]), 
                                       "max": np.array(ranges_config["total_mass_range"]["max"])}
         
@@ -555,17 +547,13 @@ class TrajTrackingEnv(gym.Env):
                 "min": self.thruster_speeds_range["min"].tolist(),
                 "max": self.thruster_speeds_range["max"].tolist()
             },
-            "rel_current_speed_range": {
-                "min": self.rel_current_speed_range["min"].tolist(),
-                "max": self.rel_current_speed_range["max"].tolist()
+            "rel_current_u_range": {
+                "min": self.rel_current_u_range["min"].tolist(),
+                "max": self.rel_current_u_range["max"].tolist()
             },
-            "rel_current_angle_cos_range": {
-                "min": self.rel_current_angle_cos_range["min"].tolist(),
-                "max": self.rel_current_angle_cos_range["max"].tolist()
-            },
-            "rel_current_angle_sin_range": {
-                "min": self.rel_current_angle_sin_range["min"].tolist(),
-                "max": self.rel_current_angle_sin_range["max"].tolist()
+            "rel_current_v_range": {
+                "min": self.rel_current_v_range["min"].tolist(),
+                "max": self.rel_current_v_range["max"].tolist()
             },
             "total_mass_range": {
                 "min": self.total_mass_range["min"].tolist(),
