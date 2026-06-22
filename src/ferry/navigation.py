@@ -366,7 +366,7 @@ class NavigationAurora(INavigation):
                     e, n = target.vessel.east, target.vessel.north
                     # print(target.vessel.geometry.shape) (3, 8)
                     ax.plot(target.vessel.geometry[1, :], target.vessel.geometry[0, :], c='red')
-                    ax.text(e+100, n+100, f"EST ({target.vessel.name or "Unknown"})" , c='red')
+                    ax.text(e+100, n+100, f"EST ({target.vessel.name or 'Unknown'})" , c='red')
                     ax.text(e+100, n+50, f"SOG [kn]: {target.vessel.sog:.2f}", c='red')
 
         if verbose >= 4:
