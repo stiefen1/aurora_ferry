@@ -6,6 +6,7 @@ from stable_baselines3.sac import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv # Explicit import for clarity
+import torch as th
 
 from datetime import datetime
 import os, pathlib
@@ -16,6 +17,7 @@ name_prefix = os.getenv("RUN_PREFIX", "aurora")
 alg = os.getenv("ALG", "sac").lower()
 n_envs = int(os.getenv("N_ENVS", "8"))
 total_timesteps = int(os.getenv("TOTAL_TIMESTEPS", "5000000"))
+requested_device = os.getenv("RL_DEVICE", "cuda")
 
 dt = 0.2
 N_WPTS = 2
@@ -32,6 +34,13 @@ def make_env():
 
 if __name__ == '__main__':
     run_name = f"{name_prefix}_{alg}_nenvs{n_envs}"
+    if requested_device == "cuda" and not th.cuda.is_available():
+        print("CUDA requested but not available. Falling back to CPU.")
+        device = "cpu"
+    else:
+        device = requested_device
+
+    print(f"Training device: {device}")
     vec_env = make_vec_env(make_env, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
 
@@ -52,7 +61,8 @@ if __name__ == '__main__':
                 vec_env,
                 verbose=1,
                 tensorboard_log=tensorboard_path,
-                gradient_steps=n_envs
+                gradient_steps=n_envs // 4, # baseline was 1 for 8 envs
+                device=device,
             )
         case "ppo":
             model = PPO( # Or SAC # PPO
@@ -60,6 +70,7 @@ if __name__ == '__main__':
                 vec_env,
                 verbose=1,
                 tensorboard_log=tensorboard_path,
+                device=device,
             )
         case _:
             raise ValueError(f"Selected algorithm invalid")
@@ -67,7 +78,7 @@ if __name__ == '__main__':
     model.learn(
         total_timesteps=total_timesteps,
         tb_log_name=run_name,
-        callback=checkpoint_callback
+        callback=checkpoint_callback,
     )
 
     # Save NN weights

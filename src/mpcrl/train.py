@@ -5,7 +5,7 @@ from src.mpcrl.traj_tracking_env import MPCRLTrajTrackingEnv
 import numpy as np, os
 
 mpc_horizon = 10
-dt = 1
+dt = 0.2
 
 env = MPCRLTrajTrackingEnv(
     dt=dt,
@@ -26,7 +26,7 @@ model = TD3(
     stats_window_size=1,
 )
 
-model.learn(100_000, log_interval=1)
+model.learn(100_000, log_interval=1000)
 
 # "wpts": np.array([mpc_horizon*[0, 0, 0]]).T, "nu_des": np.array([env.u_des, 0, 0])
 #, policy_kwargs={
