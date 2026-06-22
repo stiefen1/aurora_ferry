@@ -15,13 +15,47 @@ echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostna
 module purge
 module load Miniconda3/24.7.1-0
 source $(conda info --base)/etc/profile.d/conda.sh
-conda activate aurora-ferry
+EXPECTED_ENV="aurora-ferry-gpu"
+conda activate "$EXPECTED_ENV"
 
-PYTHON_ENV="/cluster/home/stephemo/.conda/envs/aurora-ferry/bin/python"
+if [ "${CONDA_DEFAULT_ENV}" != "$EXPECTED_ENV" ]; then
+    echo "FATAL: Expected conda env '$EXPECTED_ENV' but got '${CONDA_DEFAULT_ENV}'."
+    exit 2
+fi
+
+PYTHON_ENV="${CONDA_PREFIX}/bin/python"
+if [[ "$PYTHON_ENV" != *"/${EXPECTED_ENV}/bin/python" ]]; then
+    echo "FATAL: Python path does not point to expected env: $PYTHON_ENV"
+    exit 2
+fi
 
 echo "Using Python: $PYTHON_ENV"
 echo "Python version: $($PYTHON_ENV --version)"
 nvidia-smi || true
+
+echo "Running CUDA/PyTorch preflight check..."
+$PYTHON_ENV - <<'PY'
+import sys
+import torch
+
+print(f"torch.__version__={torch.__version__}")
+print(f"torch.version.cuda={torch.version.cuda}")
+print(f"torch.cuda.device_count={torch.cuda.device_count()}")
+print(f"torch.cuda.is_available={torch.cuda.is_available()}")
+
+if not torch.cuda.is_available():
+    print(
+        "FATAL: CUDA not available to PyTorch. "
+        "Most common cause is a CUDA version mismatch between torch build and cluster driver.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+PY
+
+if [ $? -ne 0 ]; then
+    echo "Aborting job because CUDA preflight failed."
+    exit 2
+fi
 
 cd aurora_ferry
 
