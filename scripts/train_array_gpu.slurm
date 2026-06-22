@@ -14,18 +14,14 @@ echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostna
 
 module purge
 module load Miniconda3/24.7.1-0
-source $(conda info --base)/etc/profile.d/conda.sh
-EXPECTED_ENV="aurora-ferry-gpu"
-conda activate "$EXPECTED_ENV"
 
-if [ "${CONDA_DEFAULT_ENV}" != "$EXPECTED_ENV" ]; then
-    echo "FATAL: Expected conda env '$EXPECTED_ENV' but got '${CONDA_DEFAULT_ENV}'."
-    exit 2
-fi
+# Bypass conda activate (unreliable in non-interactive SLURM batch jobs).
+# Use the full path to the target env's Python directly.
+PYTHON_ENV="/cluster/home/stephemo/.conda/envs/aurora-ferry-gpu/bin/python"
 
-PYTHON_ENV="${CONDA_PREFIX}/bin/python"
-if [[ "$PYTHON_ENV" != *"/${EXPECTED_ENV}/bin/python" ]]; then
-    echo "FATAL: Python path does not point to expected env: $PYTHON_ENV"
+if [ ! -f "$PYTHON_ENV" ]; then
+    echo "FATAL: Python not found at expected path: $PYTHON_ENV"
+    echo "Make sure aurora-ferry-gpu env is created and torch is installed."
     exit 2
 fi
 
