@@ -17,7 +17,8 @@ module load Miniconda3/24.7.1-0
 
 # Bypass conda activate (unreliable in non-interactive SLURM batch jobs).
 # Use the full path to the target env's Python directly.
-PYTHON_ENV="/cluster/home/stephemo/.conda/envs/aurora-ferry-gpu/bin/python"
+# NOTE: use python3.11 explicitly — the env's python symlink may resolve incorrectly.
+PYTHON_ENV="/cluster/home/stephemo/.conda/envs/aurora-ferry-gpu/bin/python3.11"
 
 if [ ! -f "$PYTHON_ENV" ]; then
     echo "FATAL: Python not found at expected path: $PYTHON_ENV"
