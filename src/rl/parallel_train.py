@@ -12,8 +12,10 @@ import os, pathlib
 
 root_dir = pathlib.Path(__file__).parent.parent.parent # rl-afd directory
 today_and_now = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-name_prefix = "aurora"
-alg = "sac"
+name_prefix = os.getenv("RUN_PREFIX", "aurora")
+alg = os.getenv("ALG", "sac").lower()
+n_envs = int(os.getenv("N_ENVS", "8"))
+total_timesteps = int(os.getenv("TOTAL_TIMESTEPS", "5000000"))
 
 dt = 0.2
 N_WPTS = 2
@@ -29,7 +31,7 @@ def make_env():
 
 
 if __name__ == '__main__':
-    n_envs = 8
+    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}"
     vec_env = make_vec_env(make_env, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
 
@@ -38,7 +40,7 @@ if __name__ == '__main__':
     checkpoint_callback = CheckpointCallback(
         save_freq=100_000 // n_envs,
         save_path=checkpoints_path,
-        name_prefix=name_prefix
+        name_prefix=run_name
     )
 
     # Train NN using Proximal Policy Optimization (PPO) or Soft Actor-Critic (SAC)
@@ -49,25 +51,26 @@ if __name__ == '__main__':
                 "MlpPolicy",
                 vec_env,
                 verbose=1,
-                tensorboard_log=tensorboard_path
+                tensorboard_log=tensorboard_path,
+                gradient_steps=n_envs
             )
         case "ppo":
             model = PPO( # Or SAC # PPO
                 "MlpPolicy",
                 vec_env,
                 verbose=1,
-                tensorboard_log=tensorboard_path
+                tensorboard_log=tensorboard_path,
             )
         case _:
             raise ValueError(f"Selected algorithm invalid")
         
     model.learn(
-        total_timesteps=5_000_000,
-        tb_log_name=name_prefix,
+        total_timesteps=total_timesteps,
+        tb_log_name=run_name,
         callback=checkpoint_callback
     )
 
     # Save NN weights
-    models_path = os.path.join(root_dir, 'models', alg, today_and_now, name_prefix)
+    models_path = os.path.join(root_dir, 'models', alg, today_and_now, run_name)
     model.save(models_path)
     TrajTrackingEnv(dt, n_wpts=N_WPTS, wpts_space_multiplicator=WPTS_SPACE_MULTIPLICATOR).export_observation_space_ranges_to(os.path.join(root_dir, 'models', alg, today_and_now, "observation_space_ranges.json"))
