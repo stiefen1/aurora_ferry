@@ -10,6 +10,7 @@ import torch as th
 
 from datetime import datetime
 import os, pathlib
+import json
 
 root_dir = pathlib.Path(__file__).parent.parent.parent # rl-afd directory
 today_and_now = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -18,6 +19,12 @@ alg = os.getenv("ALG", "sac").lower()
 n_envs = int(os.getenv("N_ENVS", "8"))
 total_timesteps = int(os.getenv("TOTAL_TIMESTEPS", "5000000"))
 requested_device = os.getenv("RL_DEVICE", "cuda")
+net_arch_str = os.getenv("NET_ARCH", '{"qf": [256, 256], "pi": [256, 256]}')
+try:
+    net_arch = json.loads(net_arch_str)
+except json.JSONDecodeError:
+    net_arch = {"qf": [256, 256], "pi": [256, 256]}
+    print(f"Warning: Could not parse NET_ARCH={net_arch_str}, using default")
 
 dt = 0.2
 N_WPTS = 2
@@ -33,7 +40,7 @@ def make_env():
 
 
 if __name__ == '__main__':
-    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}"
+    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}_arch{net_arch['qf'][0] if net_arch['qf'] else 'none'}"
     if requested_device == "cuda" and not th.cuda.is_available():
         print("CUDA requested but not available. Falling back to CPU.")
         device = "cpu"
@@ -63,6 +70,7 @@ if __name__ == '__main__':
                 tensorboard_log=tensorboard_path,
                 gradient_steps=n_envs // 4, # baseline was 1 for 8 envs
                 device=device,
+                policy_kwargs={'net_arch': net_arch} # Architecture from NET_ARCH env var
             )
         case "ppo":
             model = PPO( # Or SAC # PPO

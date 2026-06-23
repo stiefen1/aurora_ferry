@@ -8,7 +8,7 @@
 #SBATCH --gpus=1
 #SBATCH --time=12:00:00
 #SBATCH --partition=GPUQ
-#SBATCH --array=0-2
+#SBATCH --array=0-16
 
 echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname)"
 
@@ -57,8 +57,29 @@ fi
 cd aurora_ferry
 
 # Map array index to n_envs values to sweep.
-N_ENVS_LIST=(8 16 32)
-N_ENVS=${N_ENVS_LIST[$SLURM_ARRAY_TASK_ID]}
+# N_ENVS_LIST=(8 16 32)
+# N_ENVS=${N_ENVS_LIST[$SLURM_ARRAY_TASK_ID]}
+
+# Format: JSON string {"qf": [qf_neurons], "pi": [pi_neurons]} - Default is {"qf": [256, 256], "pi": [256, 256]}
+NET_ARCH_LIST=(
+    '{"qf": [64], "pi": [64]}'
+    '{"qf": [64], "pi": [128]}'
+    '{"qf": [64], "pi": [256]}'
+    '{"qf": [64], "pi": [512]}'
+    '{"qf": [128], "pi": [64]}'
+    '{"qf": [128], "pi": [128]}'
+    '{"qf": [128], "pi": [256]}'
+    '{"qf": [128], "pi": [512]}'
+    '{"qf": [256], "pi": [64]}'
+    '{"qf": [256], "pi": [128]}'
+    '{"qf": [256], "pi": [256]}'
+    '{"qf": [256], "pi": [512]}'
+    '{"qf": [512], "pi": [64]}'
+    '{"qf": [512], "pi": [128]}'
+    '{"qf": [512], "pi": [256]}'
+    '{"qf": [512], "pi": [512]}'
+    )
+NET_ARCH=${NET_ARCH_LIST[$SLURM_ARRAY_TASK_ID]}
 
 # Optional: tune timesteps and run naming from here.
 export N_ENVS
@@ -66,6 +87,7 @@ export ALG=sac
 export RUN_PREFIX=aurora
 export TOTAL_TIMESTEPS=5000000
 export RL_DEVICE=cuda
+export NET_ARCH
 
-echo "Running with N_ENVS=${N_ENVS}, ALG=${ALG}, TOTAL_TIMESTEPS=${TOTAL_TIMESTEPS}, RL_DEVICE=${RL_DEVICE}"
+echo "Running with N_ENVS=${N_ENVS}, ALG=${ALG}, NET_ARCH=${NET_ARCH}, RL_DEVICE=${RL_DEVICE}"
 $PYTHON_ENV src/rl/parallel_train.py
