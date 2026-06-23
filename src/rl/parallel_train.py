@@ -16,7 +16,7 @@ root_dir = pathlib.Path(__file__).parent.parent.parent # rl-afd directory
 today_and_now = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 name_prefix = os.getenv("RUN_PREFIX", "aurora")
 alg = os.getenv("ALG", "sac").lower()
-n_envs = int(os.getenv("N_ENVS", "8"))
+n_envs = int(os.getenv("N_ENVS", "16"))
 total_timesteps = int(os.getenv("TOTAL_TIMESTEPS", "5000000"))
 requested_device = os.getenv("RL_DEVICE", "cuda")
 net_arch_str = os.getenv("NET_ARCH", '{"qf": [256, 256], "pi": [256, 256]}')
@@ -40,7 +40,7 @@ def make_env():
 
 
 if __name__ == '__main__':
-    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}_arch{net_arch['qf'][0] if net_arch['qf'] else 'none'}"
+    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}_arch{net_arch['qf'][0] if net_arch['qf'] else 'none'}_{net_arch['pi'][0] if net_arch['pi'] else 'none'}"
     if requested_device == "cuda" and not th.cuda.is_available():
         print("CUDA requested but not available. Falling back to CPU.")
         device = "cpu"
