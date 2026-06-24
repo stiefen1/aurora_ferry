@@ -12,7 +12,7 @@ from datetime import datetime
 import os, pathlib
 import json
 
-root_dir = pathlib.Path(__file__).parent.parent.parent # rl-afd directory
+root_dir = pathlib.Path(__file__).parent.parent.parent 
 today_and_now = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 name_prefix = os.getenv("RUN_PREFIX", "aurora")
 alg = os.getenv("ALG", "sac").lower()
@@ -40,7 +40,9 @@ def make_env():
 
 
 if __name__ == '__main__':
-    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}_arch{net_arch['qf'][0] if net_arch['qf'] else 'none'}_{net_arch['pi'][0] if net_arch['pi'] else 'none'}"
+    qf_arch_str = "x".join([f"{l}" for l in net_arch['qf']]) if net_arch['qf'] else 'none'
+    pi_arch_str = "x".join([f"{l}" for l in net_arch['pi']]) if net_arch['pi'] else 'none'
+    run_name = f"{name_prefix}_{alg}_nenvs{n_envs}_arch_{qf_arch_str}_{pi_arch_str}"
     if requested_device == "cuda" and not th.cuda.is_available():
         print("CUDA requested but not available. Falling back to CPU.")
         device = "cpu"
@@ -54,7 +56,7 @@ if __name__ == '__main__':
     # save NN weights at a given frequency
     checkpoints_path = os.path.join(root_dir, 'checkpoints', alg, today_and_now)
     checkpoint_callback = CheckpointCallback(
-        save_freq=100_000 // n_envs,
+        save_freq=500_000 // n_envs,
         save_path=checkpoints_path,
         name_prefix=run_name
     )

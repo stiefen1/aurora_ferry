@@ -8,7 +8,7 @@
 #SBATCH --gpus=1
 #SBATCH --time=12:00:00
 #SBATCH --partition=GPUQ
-#SBATCH --array=0-16
+#SBATCH --array=0-23
 
 echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname)"
 
@@ -62,30 +62,44 @@ cd aurora_ferry
 
 # Format: JSON string {"qf": [qf_neurons], "pi": [pi_neurons]} - Default is {"qf": [256, 256], "pi": [256, 256]}
 NET_ARCH_LIST=(
-    '{"qf": [64, 64], "pi": [64, 64]}'
-    '{"qf": [64, 64], "pi": [128, 128]}'
-    '{"qf": [64, 64], "pi": [256, 256]}'
-    '{"qf": [64, 64], "pi": [512, 512]}'
-    '{"qf": [128, 128], "pi": [64, 64]}'
-    '{"qf": [128, 128], "pi": [128, 128]}'
-    '{"qf": [128, 128], "pi": [256, 256]}'
-    '{"qf": [128, 128], "pi": [512, 512]}'
+    '{"qf": [256, 256], "pi": [32, 32]}'
+    '{"qf": [256, 256], "pi": [32, 64]}'
+    '{"qf": [256, 256], "pi": [32, 128]}'
+    '{"qf": [256, 256], "pi": [64, 32]}'
     '{"qf": [256, 256], "pi": [64, 64]}'
+    '{"qf": [256, 256], "pi": [64, 128]}'
+    '{"qf": [256, 256], "pi": [128, 32]}'
+    '{"qf": [256, 256], "pi": [128, 64]}'
     '{"qf": [256, 256], "pi": [128, 128]}'
-    '{"qf": [256, 256], "pi": [256, 256]}'
-    '{"qf": [256, 256], "pi": [512, 512]}'
-    '{"qf": [512, 512], "pi": [64, 64]}'
-    '{"qf": [512, 512], "pi": [128, 128]}'
-    '{"qf": [512, 512], "pi": [256, 256]}'
-    '{"qf": [512, 512], "pi": [512, 512]}'
+    '{"qf": [256, 256], "pi": [32, 32]}'
+    '{"qf": [256, 256], "pi": [64, 32]}'
+    '{"qf": [256, 256], "pi": [128, 32]}'
+    '{"qf": [256, 256], "pi": [32, 64]}'
+    '{"qf": [256, 256], "pi": [64, 64]}'
+    '{"qf": [256, 256], "pi": [128, 64]}'
+    '{"qf": [256, 256], "pi": [32, 128]}'
+    '{"qf": [256, 256], "pi": [64, 128]}'
+    '{"qf": [256, 256], "pi": [128, 128]}'
+    '{"qf": [256, 256], "pi": [32]}'
+    '{"qf": [256, 256], "pi": [64]}'
+    '{"qf": [256, 256], "pi": [128]}'
+    '{"qf": [256, 256], "pi": [256]}'
+    '{"qf": [256, 256], "pi": [512]}'
     )
 NET_ARCH=${NET_ARCH_LIST[$SLURM_ARRAY_TASK_ID]}
 
+if [ -z "$NET_ARCH" ]; then
+    echo "FATAL: NET_ARCH is empty for SLURM_ARRAY_TASK_ID=${SLURM_ARRAY_TASK_ID}."
+    echo "Check #SBATCH --array range against NET_ARCH_LIST length."
+    exit 2
+fi
+
 # Optional: tune timesteps and run naming from here.
+N_ENVS=16
 export N_ENVS
 export ALG=sac
 export RUN_PREFIX=aurora
-export TOTAL_TIMESTEPS=5000000
+export TOTAL_TIMESTEPS=3000000
 export RL_DEVICE=cuda
 export NET_ARCH
 
