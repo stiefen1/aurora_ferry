@@ -134,6 +134,10 @@ class SimLauncher:
             guidance=TimespaceGuidance(
                 global_path=ferry_route,
                 u_des=odm["ferry"]["target_speed"],
+                dt=dt,
+                wpts_space_multiplicator=controller.wpts_space_multiplicator,
+                n_target_wpts=controller.n_wpts,
+                action_repeat=controller.action_repeat,
                 **guidance
             ),
             n_cars=n_cars,
@@ -275,5 +279,5 @@ if __name__ == "__main__":
     import os
     launcher = SimLauncher()
     # path_to_scenario = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs\\scenarios\\cos_sin_obs_0.json"
-    path_to_scenario = os.path.join("sim_data", "cos_sin_obs", "scenarios", "cos_sin_obs_0.json")
+    path_to_scenario = os.path.join("sim_data", "29_06_26_1", "scenarios", "29_06_26_1_0.json")
     launcher.run_single_sim(path_to_scenario, render=True)

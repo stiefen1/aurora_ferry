@@ -10,6 +10,10 @@ from datetime import datetime
 from src.ais.ais import Vessel
 # from src.camera.weather import is_target_detected
 from dataclasses import dataclass
+AIS_FLOOR_DEG = 5.52
+DISTANCE_INFLATION_FACTOR = 4.0
+SAFETY_MARGIN_DEG = 0.27
+RANGE_R50_M = 2312.0
 
 
 """
@@ -362,29 +366,26 @@ class Camera(ISensor):
         info = {"noisy_rel_angles": noisy_rel_angles.tolist(), "noisy_rel_distances": noisy_rel_distances.tolist(), 'all_vessels_in_camera': all_vessels, "angles_cov": angles_cov, "distances_cov": distances_cov}
         return detected_vessels, info
     
-    def get_camera_std(self, distance: float | npt.NDArray, visibility: float, illumination: float) -> Tuple[float | npt.NDArray, float | npt.NDArray]:
-        """
-        Return standard deviation of relative bearing angle (rad) and distance (m) depending on distance and weather.
-        """
-        sqrt_vis_ill = np.sqrt(visibility * illumination)
-        a_gamma = np.deg2rad(1e-7) + np.deg2rad(3e-7) * (1 - sqrt_vis_ill) # To be provided as camera params
-        a_dist = 1e-4 + 2e-4 * (1 - sqrt_vis_ill)
+    def get_camera_std(self, distance, visibility, illumination):
+        c_gamma = np.deg2rad(AIS_FLOOR_DEG)
+        a_gamma = 0.0
 
-        c_gamma = np.deg2rad(0.1) + np.deg2rad(0.4) * (1 - sqrt_vis_ill)
-        c_dist = 50 + 400 * (1 - sqrt_vis_ill)
+        a_dist = 0.0
+        c_dist_floor = 50.0
+        distance_std = DISTANCE_INFLATION_FACTOR * distance * np.tan(c_gamma) + c_dist_floor
 
-        return a_gamma * distance**2 + c_gamma, a_dist * distance**2 + c_dist
+        return a_gamma * distance**2 + c_gamma, a_dist * distance**2 + distance_std
     
     def get_detection_probability(
-            self,
-            rel_angles: npt.NDArray,
-            rel_distances: npt.NDArray,
-            yaw_ts: npt.NDArray,
-            loa: npt.NDArray,
-            beam: npt.NDArray,
-            visibility: float,
-            illumination: float,
-        ) -> Tuple[npt.NDArray, Dict]:
+                self,
+                rel_angles: npt.NDArray,
+                rel_distances: npt.NDArray,
+                yaw_ts: npt.NDArray,
+                loa: npt.NDArray,
+                beam: npt.NDArray,
+                visibility: float,
+                illumination: float,
+            ) -> Tuple[npt.NDArray, Dict]:
         """
         Compute the probability of detection using a camera.
 
@@ -396,21 +397,21 @@ class Camera(ISensor):
         illumination: scalar randing from 0 (night) to 1 (daylight)
         
         """
-        # target's FOV
+
         delta_angle_abs = np.abs(ssa(yaw_ts - rel_angles))
-        corrected_size =  0.5 * (beam + loa) - 0.5 * np.cos(2*delta_angle_abs) * (loa - beam) # beam when 0 and loa when pi/2
+        corrected_size = 0.5 * (beam + loa) - 0.5 * np.cos(2 * delta_angle_abs) * (loa - beam)
         half_fov_rad = np.atan(corrected_size / 2 / rel_distances)
         fov = 2 * np.rad2deg(half_fov_rad)
 
-        # effect of visibility & illumination
         sqrt_vis_ill = np.sqrt(visibility * illumination)
-        scale = 0.7 - 0.35 * sqrt_vis_ill
-        offset = 3 - 2 * sqrt_vis_ill
+        scale = 0.603 - 0.202 * sqrt_vis_ill
+        offset = 1.543 + SAFETY_MARGIN_DEG - 0.292 * sqrt_vis_ill
+        p_fov = 1 / (1 + np.exp(-(fov - offset) / scale))
 
-        # p -> 0 when FOV -> 0
-        # p -> 1 when FOV -> 30
-        # p -> 0 when sqrt_vis_ill -> 0
-        return 1 / (1 + 1 * np.exp(-(fov-offset)/scale) ), {} #{"corrected_size": corrected_size, "rel_angle": rel_angle.item(), "rel_distance": rel_distance.item()} # "yaw_ts": yaw_ts, "rel_angle": rel_angle, "delta_angle_abs": delta_angle_abs, "b": beam, "l": loa}
+        range_scale_m = RANGE_R50_M / 4
+        p_range = 1 / (1 + np.exp((rel_distances - RANGE_R50_M) / range_scale_m))
+
+        return p_fov * p_range, {}
 
     def is_target_detected(
             self,

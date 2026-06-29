@@ -8,7 +8,6 @@ from python_vehicle_simulator.vehicles.vessel import IVessel
 from python_vehicle_simulator.utils.unit_conversion import knot_to_m_per_sec, m_per_sec_to_knot
 from python_vehicle_simulator.utils.math_fn import ssa
 
-from src.ferry.ctrv_tt import TargetTrackerSequentialCTRV
 from src.ferry.cvm_tt import TargetTrackerSequentialEKF
 from src.ferry.state_estimator import StateEstimatorEKF
 from src.odm import ODM

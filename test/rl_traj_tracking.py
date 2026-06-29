@@ -43,6 +43,9 @@ SEED = 42
 # TODO: Improve traj tracking accuracy
 # TODO: Add time delay violation in report
 # TODO: Try to encode angles as cos(a), sin(a) to avoid jump between -pi, pi
+# TODO: Test final reward using weighted sum of exponent vs conditioned exponent (sort of curriculum learning) 
+# TODO: Revert constant distance_between_target_wpts to speed,dt,action_repeat-dependant  
+# TODO: Try to train with smaller segments to handle agressive turns
 
 aurora = AuroraFerry(
     dt,

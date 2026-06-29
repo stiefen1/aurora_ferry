@@ -54,6 +54,11 @@ class TimespaceGuidance(IGuidance):
             shrink_eps: float = 0.1,
             course_rate_integration_factor: float = 1.0,
             exponent_v_des_of_iter: float = 3.0,
+            action_repeat: int = 10,
+            n_target_wpts: int = 2,
+            dt: float = 0.2,
+            wpts_space_multiplicator: float = 7,
+            v_min: float = 0.0,
             **kwargs
     ):
         self.global_path = global_path.trim((0, global_path.length-trim_path), normalized=False)
@@ -80,6 +85,11 @@ class TimespaceGuidance(IGuidance):
         self.shrink_eps = shrink_eps
         self.course_rate_integration_factor = course_rate_integration_factor
         self.exponent_v_des_of_iter = exponent_v_des_of_iter
+        self.action_repeat = action_repeat
+        self.n_target_wpts = n_target_wpts
+        self.dt = dt
+        self.wpts_space_multiplicator = wpts_space_multiplicator
+        self.v_min = v_min
         super().__init__()
 
     def terminated(self, states: npt.NDArray) -> Tuple[bool, Dict]:
@@ -139,7 +149,8 @@ class TimespaceGuidance(IGuidance):
                     smooth_radius=self.smooth_radius,
                     max_shrink_dist_per_step=self.max_shrink_dist_per_step,
                     shkrink_eps=self.shrink_eps,
-                    exponent_v_des_of_iter=self.exponent_v_des_of_iter
+                    exponent_v_des_of_iter=self.exponent_v_des_of_iter,
+                    v_min=self.v_min
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")
@@ -167,16 +178,19 @@ class TimespaceGuidance(IGuidance):
 
             delay = elapsed_time - t
 
-            V_des = self.traj.get_speed(elapsed_time)
+            V_des = []
+            for k in range(self.n_target_wpts):
+                V_des_k = self.traj.get_speed(elapsed_time + k * self.action_repeat * self.dt * self.wpts_space_multiplicator)
+                V_des.append(V_des_k)
 
             xy = np.array(self.traj(elapsed_time))
 
-            V_command = min(max(0.0, V_des + self.kp * delay), 8.0)
+            V_command = min(max(0.0, V_des[0] + self.kp * delay), 8.0)
             # V_command = min(max(0.0, V_des + self.kp * np.linalg.norm(xy-np.array([states[1], states[0]]))), 8.0) 
 
             # print("Delay: ", elapsed_time - t, V_des, V_command)
 
-            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_command, 'delay': elapsed_time - t} | info | {'term': terminated}
+            return np.array([p_des[1], p_des[0]] + 4*[0.0] + [V_command] + 13*[0.0]), {'path': PWLPath(self.traj.xy, input_format='east-north'), 'V_des': V_des, 'delay': elapsed_time - t} | info | {'term': terminated}
 
         # self.prev = {'eta_des': states[0:6], 'nu_des': states[6:12], 'states_des': states, 'info': self.prev['info']}
         return states, {'path': None, 'V_des': None, 'term': terminated} # type:ignore

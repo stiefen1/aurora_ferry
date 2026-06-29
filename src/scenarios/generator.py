@@ -12,7 +12,7 @@ import glob
 from shapely.ops import unary_union
 from datetime import datetime, timezone
 
-DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "cos_sin_obs", "cos_sin_obs.yaml")
+DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "29_06_26_1", "29_06_26_1.yaml")
 
 class ScenarioGenerator:
     _seed: Optional[int] = None

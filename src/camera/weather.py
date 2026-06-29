@@ -31,25 +31,20 @@ def get_detection_probability(
     delta_angle_abs = abs(ssa(yaw_ts - rel_angle))
     rel_distance = np.linalg.norm(xy_rel, axis=1)
 
-    # Actual size of the TS seen by the own ship
-    corrected_size =  0.5 * (beam + loa) - 0.5 * np.cos(2*delta_angle_abs) * (loa - beam) # beam when 0 and loa when pi/2
-    
-    # FOV
+    corrected_size = 0.5 * (beam + loa) - 0.5 * np.cos(2 * delta_angle_abs) * (loa - beam)
     half_fov_rad = np.atan(corrected_size / 2 / rel_distance)
     fov = 2 * np.rad2deg(half_fov_rad)
 
-    # Impact of visibility, illumination
+    SAFETY_MARGIN_DEG = 0.27
     sqrt_vis_ill = np.sqrt(visibility * illumination)
-    scale = 0.7 - 0.35 * sqrt_vis_ill
-    offset = 3 - 2 * sqrt_vis_ill
+    scale = 0.603 - 0.202 * sqrt_vis_ill
+    offset = 1.543 + SAFETY_MARGIN_DEG - 0.292 * sqrt_vis_ill
+    p_fov = 1 / (1 + np.exp(-(fov - offset) / scale))
 
-    # Probability of detecting target ship
-    p = 1 / (1 + 1 * np.exp(-(fov-offset)/scale) )
-
-    # p -> 0 when FOV -> 0
-    # p -> 1 when FOV -> 30
-    # p -> 0 when sqrt_vis_ill -> 0
-    return p, {}
+    RANGE_R50_M = 2312.0
+    RANGE_SCALE_M = RANGE_R50_M / 4
+    p_range = 1 / (1 + np.exp((rel_distance - RANGE_R50_M) / RANGE_SCALE_M))
+    return p_fov * p_range, {}
 
 def is_target_detected(
         os_ne: npt.NDArray,

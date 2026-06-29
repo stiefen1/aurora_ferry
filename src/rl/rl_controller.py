@@ -66,31 +66,25 @@ class RLTrajTrackingController(IControl, ABC):
                           "max": np.array(ranges_config["uvr_range"]["max"])}
         self.rel_target_range = {"min": np.array(ranges_config["rel_target_range"]["min"]), 
                                  "max": np.array(ranges_config["rel_target_range"]["max"])}
-        self.rel_yaw_cos_range = {"min": np.array(ranges_config["rel_yaw_cos_range"]["min"]), 
-                              "max": np.array(ranges_config["rel_yaw_cos_range"]["max"])}
-        self.rel_yaw_sin_range = {"min": np.array(ranges_config["rel_yaw_sin_range"]["min"]), 
-                              "max": np.array(ranges_config["rel_yaw_sin_range"]["max"])}
+        self.rel_yaw_range = {"min": np.array(ranges_config["rel_yaw_range"]["min"]), 
+                              "max": np.array(ranges_config["rel_yaw_range"]["max"])}
         self.speed_error_range = {"min": np.array(ranges_config["speed_error_range"]["min"]), 
                                   "max": np.array(ranges_config["speed_error_range"]["max"])}
-        self.azimuth_angles_cos_range = {"min": np.array(ranges_config["azimuth_angles_cos_range"]["min"]), 
-                                     "max": np.array(ranges_config["azimuth_angles_cos_range"]["max"])}
-        self.azimuth_angles_sin_range = {"min": np.array(ranges_config["azimuth_angles_sin_range"]["min"]), 
-                                     "max": np.array(ranges_config["azimuth_angles_sin_range"]["max"])}
+        self.azimuth_angles_range = {"min": np.array(ranges_config["azimuth_angles_range"]["min"]), 
+                                     "max": np.array(ranges_config["azimuth_angles_range"]["max"])}
         self.thruster_speeds_range = {"min": np.array(ranges_config["thruster_speeds_range"]["min"]), 
                                       "max": np.array(ranges_config["thruster_speeds_range"]["max"])}
-        self.rel_current_speed_range = {"min": np.array(ranges_config["rel_current_speed_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_speed_range"]["max"])}
-        self.rel_current_angle_cos_range = {"min": np.array(ranges_config["rel_current_angle_cos_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_angle_cos_range"]["max"])}
-        self.rel_current_angle_sin_range = {"min": np.array(ranges_config["rel_current_angle_sin_range"]["min"]), 
-                                      "max": np.array(ranges_config["rel_current_angle_sin_range"]["max"])}
+        self.rel_current_u_range = {"min": np.array(ranges_config["rel_current_u_range"]["min"]), 
+                                      "max": np.array(ranges_config["rel_current_u_range"]["max"])}
+        self.rel_current_v_range = {"min": np.array(ranges_config["rel_current_v_range"]["min"]), 
+                                      "max": np.array(ranges_config["rel_current_v_range"]["max"])}
         self.total_mass_range = {"min": np.array(ranges_config["total_mass_range"]["min"]), 
                                       "max": np.array(ranges_config["total_mass_range"]["max"])}
         
         # Load environment parameters
         self.action_repeat = ranges_config["action_repeat"]
         self.dt = ranges_config["dt"]
-        self.dist_between_target_wpts = ranges_config["dist_between_target_wpts"]
+        self.wpts_space_multiplicator = ranges_config["wpts_space_multiplicator"]
         self.n_wpts = ranges_config["n_wpts"]
         self.counter: int = self.action_repeat - 1
 
@@ -124,16 +118,14 @@ class RLTrajTrackingController(IControl, ABC):
         azimuth_angles = states[12:16]  # The outcome of a thruster depends on the azimuth angle -> it's probably needed here
         thruster_speeds = states[16:20]
         uv_current_rel_0 = np.array([u_current_0, v_current_0]) - nu[0:2]
-        rel_current_angle_0 = ssa(np.atan2(uv_current_rel_0[1], uv_current_rel_0[0]))
-        rel_current_norm_0 = np.linalg.norm(uv_current_rel_0)
  
         # Compute distances and yaw angles relative to target waypoints
         distances = []
-        rel_yaws_cos, rel_yaws_sin = [], []
+        rel_yaws = []
         self.targets = path.get_target_wpts_from( # type: ignore
             ne[0],
             ne[1],
-            self.dist_between_target_wpts,
+            self.dt * self.action_repeat * self.wpts_space_multiplicator * V_des[0],
             self.n_wpts
         )
 
@@ -141,37 +133,30 @@ class RLTrajTrackingController(IControl, ABC):
             delta = target[0:2] - ne
             distance = float(np.linalg.norm(delta))
             rel_yaw = ssa(yaw + np.atan2(-delta[1], delta[0]))
-            rel_yaws_cos.append(np.cos(rel_yaw))
-            rel_yaws_sin.append(np.sin(rel_yaw))
+            rel_yaws.append(rel_yaw)
             distances.append(distance)
 
         # Normalize each and cast to float32
         uvr_norm = normalize(uvr, self.uvr_range["min"], self.uvr_range["max"]).astype(np.float32)
         rel_target_norm = normalize(np.array(distances), self.rel_target_range["min"], self.rel_target_range["max"]).astype(np.float32)
-        rel_yaws_cos_norm = normalize(np.array(rel_yaws_cos), self.rel_yaw_cos_range["min"], self.rel_yaw_cos_range["max"]).astype(np.float32)
-        rel_yaws_sin_norm = normalize(np.array(rel_yaws_sin), self.rel_yaw_sin_range["min"], self.rel_yaw_sin_range["max"]).astype(np.float32)
+        rel_yaws_norm = normalize(np.array(rel_yaws), self.rel_yaw_range["min"], self.rel_yaw_range["max"]).astype(np.float32)
         speed_error_norm = normalize(np.linalg.norm(uvr[0:2]) - np.array(V_des), self.speed_error_range["min"], self.speed_error_range["max"]).astype(np.float32)
-        azimuth_angles_cos_norm = normalize(np.cos(azimuth_angles), self.azimuth_angles_cos_range["min"], self.azimuth_angles_cos_range["max"]).astype(np.float32)
-        azimuth_angles_sin_norm = normalize(np.sin(azimuth_angles), self.azimuth_angles_sin_range["min"], self.azimuth_angles_sin_range["max"]).astype(np.float32)
+        azimuth_angles_norm = normalize(azimuth_angles, self.azimuth_angles_range["min"], self.azimuth_angles_range["max"]).astype(np.float32)
         thruster_speeds_norm = normalize(thruster_speeds, self.thruster_speeds_range["min"], self.thruster_speeds_range["max"]).astype(np.float32)
-        rel_current_speed_norm = normalize(np.array([rel_current_norm_0]), self.rel_current_speed_range["min"], self.rel_current_speed_range["max"]).astype(np.float32)
-        rel_current_angle_cos_norm = normalize(np.array(np.cos(rel_current_angle_0)), self.rel_current_angle_cos_range["min"], self.rel_current_angle_cos_range["max"]).astype(np.float32)
-        rel_current_angle_sin_norm = normalize(np.array(np.sin(rel_current_angle_0)), self.rel_current_angle_sin_range["min"], self.rel_current_angle_sin_range["max"]).astype(np.float32)
+        rel_current_u_norm = normalize(uv_current_rel_0[0], self.rel_current_u_range["min"], self.rel_current_u_range["max"]).astype(np.float32)
+        rel_current_v_norm = normalize(uv_current_rel_0[1], self.rel_current_v_range["min"], self.rel_current_v_range["max"]).astype(np.float32)
         total_mass_norm = normalize(np.array([m_tot_estimated]), self.total_mass_range["min"], self.total_mass_range["max"]).astype(np.float32)
 
         # Create dictionary with normalized observations using EXACT same keys as training environment
         obs_dict = {
             "uvr": uvr_norm,
             "rel_target": rel_target_norm,
-            "rel_yaw_cos": rel_yaws_cos_norm,
-            "rel_yaw_sin": rel_yaws_sin_norm,
+            "rel_yaw": rel_yaws_norm,
             "speed_error": speed_error_norm,
-            "azimuth_angles_cos": azimuth_angles_cos_norm,
-            "azimuth_angles_sin": azimuth_angles_sin_norm,
+            "azimuth_angles": azimuth_angles_norm,
             "thruster_speeds": thruster_speeds_norm,
-            "rel_current_speed": rel_current_speed_norm,
-            "rel_current_angle_cos": rel_current_angle_cos_norm,
-            "rel_current_angle_sin": rel_current_angle_sin_norm,
+            "rel_current_u": rel_current_u_norm,
+            "rel_current_v": rel_current_v_norm,
             "total_mass": total_mass_norm
         }
 
