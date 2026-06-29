@@ -55,7 +55,7 @@ scenario_generation:
         min: 0.0
         max: 7.5
         mean: 5.5
-        std: 2
+        std: 3
       mass: 2250000
       passengers:
         number:
@@ -96,7 +96,7 @@ scenario_generation:
         min: -3.14159
         max: 3.14159
         ornstein_uhlenbeck:
-          attraction: 0.01
+          attraction: 0.03
           amplitude: 0.01
       speed:
         min: 0.0

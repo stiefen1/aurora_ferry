@@ -41,7 +41,7 @@ DEFAULT_PATH_TO_CONFIG = os.path.join("src", "rl", "training.yaml")
 DEFAULT_CENTER_NE = (0, 0) # (6.212e6, 351900.0)
 
 DEFAULT_PATH_PARAMS = {
-    "d_tot": 10000, "max_turn_deg": 80, "seg_len_range":(200, 300), "start":DEFAULT_CENTER_NE, "N":1
+    "d_tot": 20000, "max_turn_deg": 80, "seg_len_range":(200, 300), "start":DEFAULT_CENTER_NE, "N":1
 }
 
 class TrajTrackingEnv(gym.Env):
@@ -62,6 +62,8 @@ class TrajTrackingEnv(gym.Env):
             action_repeat: int = 10,
             path_to_obs_ranges: Optional[str] = None,
             path_to_config: LiteralString = DEFAULT_PATH_TO_CONFIG,
+            max_steps: int = 500,
+            simple_path: bool = False,
     ):
         """
         Gymnasium navigation environment for vessel control.
@@ -104,7 +106,9 @@ class TrajTrackingEnv(gym.Env):
 
         # Current step (for plot purpose)
         self._step = 0
-        self.max_steps = 500 # i.e. 100 seconds for dt=0.02 and action_repeat=10
+        self.max_steps = max_steps # i.e. 100 seconds for dt=0.02 and action_repeat=10
+
+        self.simple_path = simple_path # Whether we enforce simple path (no self intersection) or not
 
     def reset(self, seed: int | None = None, options: Dict | None = None) -> Tuple[Dict, Dict]:
         """
@@ -164,8 +168,16 @@ class TrajTrackingEnv(gym.Env):
             target_vessel.reset()
 
         # Sample a new target position within map bounds
-        self.straight_path: PWLPath = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed) # type: ignore
-        self.path = self.straight_path.smooth(scenario["guidance"]["smooth_radius"])
+        valid = False
+        for k in range(1000):
+            self.straight_path: PWLPath = PWLPath.sample(**self.path_params, initial_angle=float(self.np_random.uniform(*self.initial_angle_range)), seed=seed+10_000*k if seed is not None else 10_000*k) # type: ignore
+            self.path = self.straight_path.smooth(scenario["guidance"]["smooth_radius"])
+            if not(self.simple_path) or self.path.is_simple():
+                valid = True
+                break
+
+        assert valid, f"No valid path found."
+
         # self.sample_new_target_speed()
         # self.current_waypoint = 1
         self.init_target_speeds(scenario["operational_domain"]["ferry"]["target_speed"])
@@ -266,7 +278,7 @@ class TrajTrackingEnv(gym.Env):
         self.V_des_along_path = np.clip(
             self.np_random.normal(
                 desired_speed, 
-                (self.V_range[1]-self.V_range[0])/10, # standard deviation = range / 6
+                (self.V_range[1]-self.V_range[0])/6, # standard deviation = range / 6
                 size=n_global_wpts - 1 # N wpts lead to N-1 segments
             ),
             self.V_range[0],
@@ -427,6 +439,8 @@ class TrajTrackingEnv(gym.Env):
         rel_current_u_norm = normalize(uv_current_rel_0[0], self.rel_current_u_range["min"], self.rel_current_u_range["max"]).astype(np.float32)
         rel_current_v_norm = normalize(uv_current_rel_0[1], self.rel_current_v_range["min"], self.rel_current_v_range["max"]).astype(np.float32)
         total_mass_norm = normalize(np.array([self.own_vessel.vessel_params.m_tot_estimated]), self.total_mass_range["min"], self.total_mass_range["max"]).astype(np.float32)
+
+        # print(f"cross-track error: {distances[0]:.3f}")
 
         return {
             "uvr": uvr_norm,
@@ -732,7 +746,7 @@ def check_environment() -> None:
     # Export ranges for controller (optional)
     env.export_observation_space_ranges_to("observation_space_ranges.json")
 
-    env.max_steps = 20
+    env.max_steps = 200
     
     for step in range(500):
         action = env.action_space.sample()  # Random action

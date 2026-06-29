@@ -19,11 +19,12 @@ alg = os.getenv("ALG", "sac").lower()
 n_envs = int(os.getenv("N_ENVS", "16"))
 total_timesteps = int(os.getenv("TOTAL_TIMESTEPS", "5000000"))
 requested_device = os.getenv("RL_DEVICE", "cuda")
-net_arch_str = os.getenv("NET_ARCH", '{"qf": [256, 256], "pi": [256, 256]}')
+net_arch_str = os.getenv("NET_ARCH", '{"qf": [256, 256], "pi": [64, 32]}')
 try:
     net_arch = json.loads(net_arch_str)
+    print(f"Using NET_ARCH={net_arch}")
 except json.JSONDecodeError:
-    net_arch = {"qf": [256, 256], "pi": [256, 256]}
+    net_arch = {"qf": [256, 256], "pi": [64, 32]}
     print(f"Warning: Could not parse NET_ARCH={net_arch_str}, using default")
 
 dt = 0.2
@@ -34,7 +35,8 @@ def make_env():
     env = TrajTrackingEnv(
         dt,
         n_wpts=N_WPTS,
-        wpts_space_multiplicator=WPTS_SPACE_MULTIPLICATOR
+        wpts_space_multiplicator=WPTS_SPACE_MULTIPLICATOR,
+        simple_path=True
     )
     return gym.wrappers.FlattenObservation(env) # Needed for Dict observation space
 
