@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH --job-name=aurora_traj    # Name of the job
+#SBATCH --output=result_%j.out     # Standard output file (%j expands to jobId)
+#SBATCH --error=result_%j.err      # Standard error file
+#SBATCH --ntasks=1                 # Number of processes
+#SBATCH --cpus-per-task=8          # Cores per process
+#SBATCH --mem=8G                   # Total memory requested
+#SBATCH --time=05:00:00            # Time limit (HH:MM:SS)
+#SBATCH --partition=CPUQ          # Partition/Queue to submit to
+
+echo "Starting job on $(hostname)"
+
+module purge
+module load Miniconda3/24.7.1-0
+source $(conda info --base)/etc/profile.d/conda.sh
+conda activate aurora-ferry
+
+# Force the correct Python by using the full path
+PYTHON_ENV="/cluster/home/stephemo/.conda/envs/aurora-ferry/bin/python"
+
+echo "Using Python: $PYTHON_ENV"
+echo "Python version: $($PYTHON_ENV --version)"
+
+# Change to project directory
+cd aurora_ferry
+
+# Run the script with the correct Python
+echo "Generating scenarios using generator.py..."
+$PYTHON_ENV src/scenarios/generator.py 
+echo "Running parallel_sim_launcher.py..."
+$PYTHON_ENV src/scenarios/parallel_sim_launcher.py --workers 8
