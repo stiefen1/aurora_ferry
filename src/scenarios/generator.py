@@ -12,7 +12,7 @@ import glob
 from shapely.ops import unary_union
 from datetime import datetime, timezone
 
-DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "29_06_26_1", "29_06_26_1.yaml")
+DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "30_06_26_1", "30_06_26_1.yaml")
 
 class ScenarioGenerator:
     _seed: Optional[int] = None
@@ -321,6 +321,8 @@ class ScenarioGenerator:
             sampled = self._sample_node(scenario_generation)
             if isinstance(sampled, dict):
                 start_sec, duration_sec = self._attach_simulation_start_time(sampled)
+                sampled["simulation"]["duration_sec"] = duration_sec
+
                 # Sample a collision-free start position now that start_sec is known
                 safety_dist = float(scenario_generation.get("safety_distance_at_spawn", 200)) # float(guidance_cfg.get("buffer_target_ships", 100.0)) + float(guidance_cfg.get("corridor_width", 50.0)) / 2.0
                 csv_path = self._resolve_data_path(sampled["ais_data_paths"]).replace('raw', 'smooth_interp')
