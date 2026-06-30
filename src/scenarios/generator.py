@@ -251,7 +251,13 @@ class ScenarioGenerator:
         if not isinstance(simulation_cfg, dict):
             raise ValueError("Missing required 'scenario_generation.simulation' section in config")
 
-        duration_raw = simulation_cfg.get("duration_sec")
+        target_speed_cfg = self.config["scenario_generation"]["operational_domain"]["ferry"]["target_speed"] # min, max, mean, std
+        sampled_target_speed = sampled["operational_domain"]["ferry"]["target_speed"] 
+        assert sampled_target_speed > 0, f"sampled_target_speed must be > 0, got {sampled_target_speed:.3f}"
+
+        duration_sec_at_mean_target_speed = simulation_cfg.get("duration_sec_at_mean_target_speed")
+        mean_target_speed = target_speed_cfg.get("mean", 0.5*(target_speed_cfg["max"]+target_speed_cfg["min"]))
+        duration_raw = mean_target_speed * duration_sec_at_mean_target_speed / sampled_target_speed # corrected duration based on sampled target speed
         if duration_raw is None:
             raise ValueError("Missing required 'scenario_generation.simulation.duration_sec' in config")
 
