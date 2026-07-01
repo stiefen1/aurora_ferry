@@ -1,4 +1,5 @@
 from typing import List, Dict, Tuple, Optional
+import argparse
 from pathlib import Path
 
 from python_vehicle_simulator.lib.obstacle import Obstacle
@@ -601,8 +602,12 @@ class SimAnalyzer:
 
 
 if __name__ == "__main__":
-    import os
-    # path_to_data = os.path.join("sim_data", "test") 
-    path_to_data = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs_no_traj_offset_low_kp_high_dudchi_no_course_rate"
-    analyzer = SimAnalyzer(path_to_data)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "path_to_dir",
+        help="Path to experiment directory containing simulations/ and scenarios/",
+    )
+    args = parser.parse_args()
+
+    analyzer = SimAnalyzer(args.path_to_dir)
     analyzer()
