@@ -114,16 +114,33 @@ class ScenarioGenerator:
 
         if isinstance(node, dict):
             sampled: dict[str, Any] = {}
+            excluded_ais_filenames = self._get_excluded_ais_filenames(node)
             for key, value in node.items():
                 if key == "info":
                     sampled[key] = value
                 elif key == "ais_data_paths" and isinstance(value, list) and value:
-                    sampled[key] = value[int(self.rng.integers(0, len(value)))]
+                    candidate_paths = [
+                        p for p in value
+                        if not (isinstance(p, str) and os.path.basename(p) in excluded_ais_filenames)
+                    ]
+                    if not candidate_paths:
+                        raise ValueError(
+                            "No AIS paths left in 'ais_data_paths' after applying 'exclude_from_ais'."
+                        )
+                    sampled[key] = candidate_paths[int(self.rng.integers(0, len(candidate_paths)))]
                 elif key == "ais_data_paths" and isinstance(value, str) and value:
                     folder_path = self._resolve_data_path(value)
                     csv_paths = glob.glob(os.path.join(folder_path, "*.csv"))
+                    if excluded_ais_filenames:
+                        csv_paths = [
+                            path for path in csv_paths
+                            if os.path.basename(path) not in excluded_ais_filenames
+                        ]
                     if not csv_paths:
-                        raise ValueError(f"No CSV files found in ais_data_paths folder: {value}")
+                        raise ValueError(
+                            "No CSV files found in ais_data_paths folder after applying "
+                            f"exclude_from_ais: {value}"
+                        )
                     selected_csv = csv_paths[int(self.rng.integers(0, len(csv_paths)))]
                     selected_rel = os.path.relpath(selected_csv, os.getcwd()).replace("\\", "/")
                     sampled[key] = f"/{selected_rel}"
@@ -143,6 +160,18 @@ class ScenarioGenerator:
         if isinstance(value, dict) and "value" in value:
             return value["value"]
         return value
+
+    @staticmethod
+    def _get_excluded_ais_filenames(node: dict[str, Any]) -> set[str]:
+        raw = node.get("exclude_from_ais", [])
+        if not isinstance(raw, list):
+            return set()
+
+        excluded: set[str] = set()
+        for item in raw:
+            if isinstance(item, str) and item:
+                excluded.add(os.path.basename(item))
+        return excluded
 
     def _resolve_data_path(self, data_path: str) -> str:
         if os.path.isabs(data_path) and os.path.exists(data_path):
