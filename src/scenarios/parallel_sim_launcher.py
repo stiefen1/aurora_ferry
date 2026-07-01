@@ -30,7 +30,7 @@ def _run_sim(path_to_config: str) -> tuple[str, str]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("scenario_dir", nargs="?", default=os.path.join("sim_data", "30_06_26_1", "scenarios"))
+    parser.add_argument("scenario_dir", nargs="?", default="you shall pass an argument, no default path is allowed. Muahahahahah")
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 

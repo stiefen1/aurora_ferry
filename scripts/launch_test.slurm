@@ -7,8 +7,9 @@
 #SBATCH --mem=8G                   # Total memory requested
 #SBATCH --time=05:00:00            # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ          # Partition/Queue to submit to
+#SBATCH --array=0-4
 
-echo "Starting job on $(hostname)"
+echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname)"
 
 module purge
 module load Miniconda3/24.7.1-0
@@ -24,8 +25,24 @@ echo "Python version: $($PYTHON_ENV --version)"
 # Change to project directory
 cd aurora_ferry
 
+EXPERIMENTS=(
+    "01_07_26_colregs_2"
+    "01_07_26_colregs_3"
+    "01_07_26_dchi_7_5"
+    "01_07_26_move_p_f_after_8_iter"
+    "01_07_26_v_min_0_5"
+)
+
+if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then
+    echo "Error: SLURM_ARRAY_TASK_ID=$SLURM_ARRAY_TASK_ID is out of range for EXPERIMENTS (${#EXPERIMENTS[@]} items)."
+    exit 1
+fi
+
+EXPERIMENT=${EXPERIMENTS[$SLURM_ARRAY_TASK_ID]}
+PATH_TO_CONFIG="/cluster/home/stephemo/dev/aurora_ferry/sim_data/${EXPERIMENT}"
+
 # Run the script with the correct Python
 echo "Generating scenarios using generator.py..."
-$PYTHON_ENV src/scenarios/generator.py 
+$PYTHON_ENV src/scenarios/generator.py "${PATH_TO_CONFIG}/${EXPERIMENT}.yaml"
 echo "Running parallel_sim_launcher.py..."
-$PYTHON_ENV src/scenarios/parallel_sim_launcher.py --workers 8
+$PYTHON_ENV src/scenarios/parallel_sim_launcher.py "${PATH_TO_CONFIG}/scenarios" --workers 8

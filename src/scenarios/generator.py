@@ -12,7 +12,7 @@ import glob
 from shapely.ops import unary_union
 from datetime import datetime, timezone
 
-DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "30_06_26_1", "30_06_26_1.yaml")
+DEFAULT_PATH_TO_CONFIG = os.path.join("sim_data", "01_07_26_1", "01_07_26_1.yaml")
 
 class ScenarioGenerator:
     _seed: Optional[int] = None
@@ -380,7 +380,13 @@ class ScenarioGenerator:
         
 
 if __name__ == "__main__":
-    odm_gen = ScenarioGenerator(DEFAULT_PATH_TO_CONFIG)
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("scenario_dir", nargs="?", default="you shall pass an argument, no default path is allowed. Muahahahahah")
+    args = parser.parse_args()
+
+    odm_gen = ScenarioGenerator(args.scenario_dir)
     odm_gen()
 
     # config.yaml
