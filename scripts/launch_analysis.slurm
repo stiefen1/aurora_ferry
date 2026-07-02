@@ -4,10 +4,10 @@
 #SBATCH --error=analysis_%A_%a.err      # Standard error file
 #SBATCH --ntasks=1                      # Number of processes
 #SBATCH --cpus-per-task=8               # Cores per process
-#SBATCH --mem=16G                       # Total memory requested
+#SBATCH --mem=32G                       # Total memory requested
 #SBATCH --time=05:00:00                 # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ                # Partition/Queue to submit to
-#SBATCH --array=0-9
+#SBATCH --array=0-4
 
 set -euo pipefail
 
@@ -27,16 +27,11 @@ echo "Python version: $(${PYTHON_ENV} --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "01_07_26_chi_01"
-    "01_07_26_chi_02"
-    "01_07_26_chi_03"
-    "01_07_26_chi_04"
-    "01_07_26_chi_05"
-    "01_07_26_chi_06"
-    "01_07_26_chi_07"
-    "01_07_26_chi_08"
-    "01_07_26_chi_09"
-    "01_07_26_chi_1"
+    "smooth_path_full_du_01"
+    "smooth_path_full_du_02"
+    "smooth_path_full_du_03"
+    "smooth_path_full_du_04"
+    "smooth_path_full_du_05"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then

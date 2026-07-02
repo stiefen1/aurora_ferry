@@ -158,9 +158,9 @@ class TimespaceGuidance(IGuidance):
 
             if traj is not None: # valid trajectory was found
                 if isclose(traj(0)[0], x1) and  isclose(traj(0)[1], y1): # There are small numerical errors
-                    # print(f"Starting position was moved because p0 = {(states[1], states[0])} != {traj(0)}")
                     if self.traj is not None and self.new_traj_offset is not None:
-                        self.traj = PWLTrajectory([(x0, y0, 0.0)] + traj.xyt) # type: ignore
+                        stitched_path = PWLTrajectory([(x0, y0, 0.0)] + traj.xyt).smooth(self.smooth_radius) # type: ignore
+                        self.traj = self.planner.projector.add_timestamps(stitched_path)
                         self.traj.corridor_width = self.corridor_width
                     else:
                         self.traj = traj
