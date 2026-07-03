@@ -150,7 +150,9 @@ class TimespaceGuidance(IGuidance):
                     max_shrink_dist_per_step=self.max_shrink_dist_per_step,
                     shkrink_eps=self.shrink_eps,
                     exponent_v_des_of_iter=self.exponent_v_des_of_iter,
-                    v_min=self.v_min
+                    v_min=self.v_min,
+                    time_at_p0_of_moving_ships=0.0
+
                 )
             except Exception as e:
                 print(f"Error while planning avoidance maneuver: {e}")

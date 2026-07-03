@@ -27,11 +27,15 @@ echo "Python version: $(${PYTHON_ENV} --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "smooth_path_full_du_01"
-    "smooth_path_full_du_02"
-    "smooth_path_full_du_03"
-    "smooth_path_full_du_04"
-    "smooth_path_full_du_05"
+    "dchi_2p5_width_60"
+    "dchi_2p5_width_70"
+    "dchi_2p5_width_80"
+    "dchi_5_width_60"
+    "dchi_5_width_70"
+    "dchi_5_width_80"
+    "dchi_7p5_width_60"
+    "dchi_7p5_width_70"
+    "dchi_7p5_width_80"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then
