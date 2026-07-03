@@ -7,7 +7,7 @@
 #SBATCH --mem=32G                       # Total memory requested
 #SBATCH --time=05:00:00                 # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ                # Partition/Queue to submit to
-#SBATCH --array=0-4
+#SBATCH --array=0-8
 
 set -euo pipefail
 

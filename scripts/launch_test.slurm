@@ -7,7 +7,7 @@
 #SBATCH --mem=8G                   # Total memory requested
 #SBATCH --time=05:00:00            # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ          # Partition/Queue to submit to
-#SBATCH --array=0-4
+#SBATCH --array=0-8
 
 echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname)"
 
