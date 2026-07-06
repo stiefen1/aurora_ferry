@@ -39,6 +39,9 @@ class TrackedTarget:
     vessel: Vessel
     tracker: TargetTrackerSequentialEKF # TargetTrackerSequentialEKF
     last_update_time: datetime
+    skip_ais_every: Optional[int] = None
+    ais_update_count: int = 0
+    
     
     def predict(self, command: np.ndarray) -> None:
         """Predict the target's next state."""
@@ -50,6 +53,10 @@ class TrackedTarget:
     
     def update_from_ais(self, measurement: np.ndarray, update_time: datetime) -> None:
         """Update tracker with AIS measurement."""
+        if self.skip_ais_every is not None and self.ais_update_count % self.skip_ais_every == 0:
+            self.ais_update_count = 0
+            return 
+        
         self.last_update_time = update_time
         self.tracker.update_ais(measurement)
         # Update vessel with tracker state
@@ -57,6 +64,7 @@ class TrackedTarget:
         self.vessel.sog = m_per_sec_to_knot(sog)
         self.vessel.cog = np.rad2deg(cog)
         self.vessel.heading = self.vessel.cog
+        self.ais_update_count += 1
     
     def update_from_camera(self, measurement: np.ndarray, update_time: datetime, os_neyaw: Optional[np.ndarray] = None) -> None:
         """Update tracker with camera measurement."""
@@ -99,6 +107,7 @@ class NavigationAurora(INavigation):
             distance_threshold_target_tracking: float = 2000,
             ground_truth_target_ships: bool = False, # whether we can use ground truth target ships pose or not
             ground_truth_update_every_sec: int = 1,
+            skip_ais_every: Optional[int] = None,
             **kwargs
     ):
         sensors = sensors if sensors is not None else {} # 'camera': Camera(), 'ais': AIS(path_to_ais)
@@ -107,6 +116,7 @@ class NavigationAurora(INavigation):
         self.distance_threshold_target_tracking = distance_threshold_target_tracking
         self.ground_truth_target_ships = ground_truth_target_ships        
         self.ground_truth_update_every_sec = ground_truth_update_every_sec
+        self.skip_ais_every = skip_ais_every
 
         self.target_tracker_params = {
             'Q': np.diag(q_tt),
@@ -181,7 +191,7 @@ class NavigationAurora(INavigation):
                         **deepcopy(self.target_tracker_params),
                         x0=np.array([vessel_ais.north, vessel_ais.east, knot_to_m_per_sec(vessel_ais.sog), np.deg2rad(vessel_ais.cog)])
                     )
-                    self.target_collection[vessel_ais.mmsi] = TrackedTarget(vessel=vessel_ais, tracker=new_tracker, last_update_time=target_time)
+                    self.target_collection[vessel_ais.mmsi] = TrackedTarget(vessel=vessel_ais, tracker=new_tracker, last_update_time=target_time, skip_ais_every=self.skip_ais_every)
         else:
             vessels_ais: List[Vessel] = []
 
@@ -226,7 +236,7 @@ class NavigationAurora(INavigation):
                         **deepcopy(self.target_tracker_params),
                         x0=np.array([n_ts, e_ts, 0.1, ssa(states_estimation[5] + measurement[0] + np.pi)]) # TODO: Don't use true value as initial guess, this is so over-confident
                     )
-                    self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time)
+                    self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time, skip_ais_every=self.skip_ais_every)
         else:
             detected_vessels: List[Vessel] = []
 
@@ -265,7 +275,7 @@ class NavigationAurora(INavigation):
                         **deepcopy(self.target_tracker_params),
                         x0=np.array([vessel.north, vessel.east, knot_to_m_per_sec(vessel.sog), np.deg2rad(vessel.cog)])
                     )
-                    self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time)
+                    self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time, skip_ais_every=self.skip_ais_every)
         else:
             detected_vessels: List[Vessel] = []
 

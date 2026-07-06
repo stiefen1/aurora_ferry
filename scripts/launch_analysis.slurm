@@ -7,7 +7,7 @@
 #SBATCH --mem=32G                       # Total memory requested
 #SBATCH --time=05:00:00                 # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ                # Partition/Queue to submit to
-#SBATCH --array=0-8
+#SBATCH --array=0-9
 
 set -euo pipefail
 
@@ -27,15 +27,16 @@ echo "Python version: $(${PYTHON_ENV} --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "dchi_2p5_width_60"
-    "dchi_2p5_width_70"
-    "dchi_2p5_width_80"
-    "dchi_5_width_60"
-    "dchi_5_width_70"
-    "dchi_5_width_80"
-    "dchi_7p5_width_60"
-    "dchi_7p5_width_70"
-    "dchi_7p5_width_80"
+    "skip_ais_every_1"
+    "skip_ais_every_2"
+    "skip_ais_every_3"
+    "skip_ais_every_4"
+    "skip_ais_every_5"
+    "skip_ais_every_6"
+    "skip_ais_every_7"
+    "skip_ais_every_8"
+    "skip_ais_every_9"
+    "skip_ais_every_10"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then
