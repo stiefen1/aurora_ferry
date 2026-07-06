@@ -132,11 +132,12 @@ class SimAnalyzer:
             ax_travel_dist.plot(sim["x"]["time"], sim["travel_distance"], color=color)
 
             ## Trajectory tracking accuracy
+            n_skip = int(60//simulation["dt"])
             sim["pos_error"], sim["speed_error"] = self.trajectory_tracking_error(
-                sim["x"], sim["x_des"]
+                sim["x"], sim["x_des"], start_monitoring_after_n_steps=n_skip # exclude trajectory tracking error before 1 min
             )
-            ax_pos_track_error.plot(sim["x"]["time"], sim["pos_error"], color=color)
-            ax_speed_track_error.plot(sim["x"]["time"], sim["speed_error"], color=color)
+            ax_pos_track_error.plot(sim["x"]["time"][n_skip:], sim["pos_error"], color=color)
+            ax_speed_track_error.plot(sim["x"]["time"][n_skip:], sim["speed_error"], color=color)
             corridor_exceeded = bool(np.any(sim["pos_error"] > float(scenario_generation["guidance"]["corridor_width"]) / 2.0))
             
             ## Target tracking accuracy
@@ -469,9 +470,9 @@ class SimAnalyzer:
         return np.sum(delta_azimuth**2, axis=1), mu * np.sum(thruster_speed**2, axis=1)
 
 
-    def trajectory_tracking_error(self, states: Dict, traj_data: Dict) -> Tuple[npt.NDArray, npt.NDArray]:
-        pos_error = np.hypot(states["data"][:, 0] - traj_data["data"][:, 0], states["data"][:, 1] - traj_data["data"][:, 1])
-        speed_error = np.sqrt(states["data"][:, 6]**2 + states["data"][:, 7]**2) - traj_data["data"][:, 6]
+    def trajectory_tracking_error(self, states: Dict, traj_data: Dict, start_monitoring_after_n_steps: int = 0) -> Tuple[npt.NDArray, npt.NDArray]:
+        pos_error = np.hypot(states["data"][start_monitoring_after_n_steps:, 0] - traj_data["data"][start_monitoring_after_n_steps:, 0], states["data"][start_monitoring_after_n_steps:, 1] - traj_data["data"][start_monitoring_after_n_steps:, 1])
+        speed_error = np.sqrt(states["data"][start_monitoring_after_n_steps:, 6]**2 + states["data"][start_monitoring_after_n_steps:, 7]**2) - traj_data["data"][start_monitoring_after_n_steps:, 6]
         return pos_error, speed_error
 
     def travel_distance(self, states: Dict) -> npt.NDArray:
