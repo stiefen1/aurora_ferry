@@ -53,10 +53,10 @@ class TrackedTarget:
     
     def update_from_ais(self, measurement: np.ndarray, update_time: datetime) -> None:
         """Update tracker with AIS measurement."""
+        self.ais_update_count += 1
         if self.skip_ais_every is not None and self.ais_update_count % self.skip_ais_every == 0:
-            self.ais_update_count = 0
-            return 
-        
+            return
+
         self.last_update_time = update_time
         self.tracker.update_ais(measurement)
         # Update vessel with tracker state
@@ -64,7 +64,6 @@ class TrackedTarget:
         self.vessel.sog = m_per_sec_to_knot(sog)
         self.vessel.cog = np.rad2deg(cog)
         self.vessel.heading = self.vessel.cog
-        self.ais_update_count += 1
     
     def update_from_camera(self, measurement: np.ndarray, update_time: datetime, os_neyaw: Optional[np.ndarray] = None) -> None:
         """Update tracker with camera measurement."""
