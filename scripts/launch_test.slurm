@@ -26,8 +26,8 @@ echo "Python version: $($PYTHON_ENV --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "use_ais_every_1"
     "use_ais_every_2"
+    "use_ais_every_3"
     "use_ais_every_4"
     "use_ais_every_8"
     "use_ais_every_16"
