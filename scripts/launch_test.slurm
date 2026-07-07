@@ -26,16 +26,16 @@ echo "Python version: $($PYTHON_ENV --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "skip_ais_every_1"
-    "skip_ais_every_2"
-    "skip_ais_every_3"
-    "skip_ais_every_4"
-    "skip_ais_every_5"
-    "skip_ais_every_6"
-    "skip_ais_every_7"
-    "skip_ais_every_8"
-    "skip_ais_every_9"
-    "skip_ais_every_10"
+    "use_ais_every_1"
+    "use_ais_every_2"
+    "use_ais_every_4"
+    "use_ais_every_8"
+    "use_ais_every_16"
+    "use_ais_every_32"
+    "use_ais_every_64"
+    "use_ais_every_128"
+    "use_ais_every_256"
+    "use_ais_every_512"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then
