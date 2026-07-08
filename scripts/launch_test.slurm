@@ -7,7 +7,7 @@
 #SBATCH --mem=8G                   # Total memory requested
 #SBATCH --time=05:00:00            # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ          # Partition/Queue to submit to
-#SBATCH --array=0-9
+#SBATCH --array=0-10
 
 echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname)"
 
@@ -26,16 +26,17 @@ echo "Python version: $($PYTHON_ENV --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "use_ais_every_2"
-    "use_ais_every_3"
-    "use_ais_every_4"
-    "use_ais_every_8"
-    "use_ais_every_16"
-    "use_ais_every_32"
-    "use_ais_every_64"
-    "use_ais_every_128"
-    "use_ais_every_256"
-    "use_ais_every_512"
+    "use_ais_every_1_no_camera"
+    "use_ais_every_2_no_camera"
+    "use_ais_every_3_no_camera"
+    "use_ais_every_4_no_camera"
+    "use_ais_every_8_no_camera"
+    "use_ais_every_16_no_camera"
+    "use_ais_every_32_no_camera"
+    "use_ais_every_64_no_camera"
+    "use_ais_every_128_no_camera"
+    "use_ais_every_256_no_camera"
+    "use_ais_every_512_no_camera"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then
