@@ -27,17 +27,17 @@ echo "Python version: $(${PYTHON_ENV} --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "use_ais_every_1_no_camera_high_forget_time"
-    "use_ais_every_2_no_camera_high_forget_time"
-    "use_ais_every_3_no_camera_high_forget_time"
-    "use_ais_every_4_no_camera_high_forget_time"
-    "use_ais_every_8_no_camera_high_forget_time"
-    "use_ais_every_16_no_camera_high_forget_time"
-    "use_ais_every_32_no_camera_high_forget_time"
-    "use_ais_every_64_no_camera_high_forget_time"
-    "use_ais_every_128_no_camera_high_forget_time"
-    "use_ais_every_256_no_camera_high_forget_time"
-    "use_ais_every_512_no_camera_high_forget_time"
+    "use_ais_every_1_high_forget_time"
+    "use_ais_every_2_high_forget_time"
+    "use_ais_every_3_high_forget_time"
+    "use_ais_every_4_high_forget_time"
+    "use_ais_every_8_high_forget_time"
+    "use_ais_every_16_high_forget_time"
+    "use_ais_every_32_high_forget_time"
+    "use_ais_every_64_high_forget_time"
+    "use_ais_every_128_high_forget_time"
+    "use_ais_every_256_high_forget_time"
+    "use_ais_every_512_high_forget_time"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then
