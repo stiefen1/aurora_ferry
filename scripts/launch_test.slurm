@@ -7,7 +7,7 @@
 #SBATCH --mem=8G                   # Total memory requested
 #SBATCH --time=05:00:00            # Time limit (HH:MM:SS)
 #SBATCH --partition=CPUQ          # Partition/Queue to submit to
-#SBATCH --array=0-10
+#SBATCH --array=0-19
 
 echo "Starting job ${SLURM_JOB_ID} array task ${SLURM_ARRAY_TASK_ID} on $(hostname)"
 
@@ -26,17 +26,26 @@ echo "Python version: $($PYTHON_ENV --version)"
 cd aurora_ferry
 
 EXPERIMENTS=(
-    "use_ais_every_1_high_forget_time"
-    "use_ais_every_2_high_forget_time"
-    "use_ais_every_3_high_forget_time"
-    "use_ais_every_4_high_forget_time"
-    "use_ais_every_8_high_forget_time"
-    "use_ais_every_16_high_forget_time"
-    "use_ais_every_32_high_forget_time"
-    "use_ais_every_64_high_forget_time"
-    "use_ais_every_128_high_forget_time"
-    "use_ais_every_256_high_forget_time"
-    "use_ais_every_512_high_forget_time"
+    "10_07_26_use_ais_every_16_ais_1_dist_1"
+    "10_07_26_use_ais_every_16_ais_1_dist_2"
+    "10_07_26_use_ais_every_16_ais_1_dist_3"
+    "10_07_26_use_ais_every_16_ais_1_dist_4"
+    "10_07_26_use_ais_every_16_ais_2_dist_1"
+    "10_07_26_use_ais_every_16_ais_2_dist_2"
+    "10_07_26_use_ais_every_16_ais_2_dist_3"
+    "10_07_26_use_ais_every_16_ais_2_dist_4"
+    "10_07_26_use_ais_every_16_ais_3_dist_1"
+    "10_07_26_use_ais_every_16_ais_3_dist_2"
+    "10_07_26_use_ais_every_16_ais_3_dist_3"
+    "10_07_26_use_ais_every_16_ais_3_dist_4"
+    "10_07_26_use_ais_every_16_ais_4_dist_1"
+    "10_07_26_use_ais_every_16_ais_4_dist_2"
+    "10_07_26_use_ais_every_16_ais_4_dist_3"
+    "10_07_26_use_ais_every_16_ais_4_dist_4"
+    "10_07_26_use_ais_every_16_ais_5_dist_1"
+    "10_07_26_use_ais_every_16_ais_5_dist_2"
+    "10_07_26_use_ais_every_16_ais_5_dist_3"
+    "10_07_26_use_ais_every_16_ais_5_dist_4"
 )
 
 if [ "$SLURM_ARRAY_TASK_ID" -ge "${#EXPERIMENTS[@]}" ]; then

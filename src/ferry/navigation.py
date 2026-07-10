@@ -26,6 +26,12 @@ import numpy as np, numpy.typing as npt, gymnasium as gym
 
 Q_AURORA = np.diag([0.3**2, 0.3**2, 0, 0, 0, (0.4*np.pi/180)**2, 0.02**2, 0.02**2, 0, 0, 0, 15*np.pi/180/3600, *np.array(4*[np.pi/100]), *np.array(4*[1.0])])
 R_AURORA = np.diag([1e-2, 1e-2, 0.2*np.pi/180, 5e-2, 5e-2, 5e-2, *np.array(4*[np.pi/100])])
+Q_TT = lambda dt, q: np.array([
+        [dt**3 / 3, 0.0, dt**2 / 2, 0.0],
+        [0.0, dt**3 / 3, 0.0, dt**2 / 2],
+        [dt**2 / 2, 0.0, dt, 0.0],
+        [0.0, dt**2 / 2, 0.0, dt]
+    ]) * q
 
 R_WIND = np.diag([np.pi/5, 0.2])    # direction [rad], speed [m/s]
 R_CURRENT = np.diag([np.pi/20, 0.1]) # direction [rad], speed [m/s]
@@ -42,15 +48,17 @@ class TrackedTarget:
     use_ais_every: Optional[int] = None
     ais_update_count: int = 0
     
+    def update_vessel(self) -> None:
+        self.vessel.north, self.vessel.east, vn, ve = self.tracker.x.tolist()
+        self.vessel.sog = m_per_sec_to_knot(np.sqrt(vn**2+ve**2))
+        self.vessel.cog = np.rad2deg(np.atan2(ve, vn))
+        self.vessel.heading = self.vessel.cog
     
     def predict(self, command: np.ndarray) -> None:
         """Predict the target's next state."""
         self.tracker.predict(command)
-        self.vessel.north, self.vessel.east, sog, cog = self.tracker.x.tolist()
-        self.vessel.sog = m_per_sec_to_knot(sog)
-        self.vessel.cog = np.rad2deg(cog)
-        self.vessel.heading = self.vessel.cog
-    
+        self.update_vessel()
+        
     def update_from_ais(self, measurement: np.ndarray, update_time: datetime) -> None:
         """Update tracker with AIS measurement."""
         self.ais_update_count += 1
@@ -60,21 +68,14 @@ class TrackedTarget:
         self.last_update_time = update_time
         self.tracker.update_ais(measurement)
         # Update vessel with tracker state
-        self.vessel.north, self.vessel.east, sog, cog = self.tracker.x.tolist()
-        self.vessel.sog = m_per_sec_to_knot(sog)
-        self.vessel.cog = np.rad2deg(cog)
-        self.vessel.heading = self.vessel.cog
+        self.update_vessel()
     
     def update_from_camera(self, measurement: np.ndarray, update_time: datetime, os_neyaw: Optional[np.ndarray] = None) -> None:
         """Update tracker with camera measurement."""
         self.last_update_time = update_time
         self.tracker.update_camera(measurement, os_neyaw=os_neyaw)
         # Update vessel with tracker state
-        self.vessel.north, self.vessel.east, sog, cog = self.tracker.x.tolist()
-        # print("abc", self.vessel.north, self.vessel.east, sog, cog)
-        self.vessel.sog = m_per_sec_to_knot(sog)
-        self.vessel.cog = np.rad2deg(cog)
-        self.vessel.heading = self.vessel.cog
+        self.update_vessel()
 
 class NavigationAurora(INavigation):
     """
@@ -90,10 +91,10 @@ class NavigationAurora(INavigation):
             states: np.ndarray,
             dt: float,
             *args,
-            q_tt: List = [0.1**2, 0.1**2, 0.1**2, np.deg2rad(1)**2],  # process noise     (target tracker)
+            q_tt: float = 0.4,  # process noise     (target tracker)
             r_ais: List = [10**2, 10**2, 0.2**2, np.deg2rad(2)**2],        # measurement noise (AIS)
             r_camera: List = [np.deg2rad(0.5)**2, 800**2],     # measurement noise (camera)
-            p0_tt: List = [1, 1, 1, 1],                  # state covariance  (target tracker)
+            p0_tt: List = [49.0, 49.0, 0.5, 0.5],                  # state covariance  (target tracker)
             Q_se: Optional[np.ndarray] = Q_AURORA,          # process noise     (state estimator)
             R_se: Optional[np.ndarray] = R_AURORA,          # measurement noise (state estimator)
             P0_se: np.ndarray = np.eye(20),                 # state covariance  (state estimator)
@@ -118,7 +119,7 @@ class NavigationAurora(INavigation):
         self.use_ais_every = use_ais_every
 
         self.target_tracker_params = {
-            'Q': np.diag(q_tt),
+            'Q': Q_TT(dt, q_tt),
             'R_ais': np.diag(r_ais), # self.odm.sensors["ais"]["noise-covariance"]
             'R_camera': np.diag(r_camera), # self.odm.sensors["camera"]["noise-covariance"]
             'P0': np.diag(p0_tt),
@@ -188,7 +189,7 @@ class NavigationAurora(INavigation):
                     # AIS does not directly provide turn rate.
                     new_tracker = TargetTrackerSequentialEKF( # TargetTrackerSequentialCTRV(#TargetTrackerSequentialEKF(
                         **deepcopy(self.target_tracker_params),
-                        x0=np.array([vessel_ais.north, vessel_ais.east, knot_to_m_per_sec(vessel_ais.sog), np.deg2rad(vessel_ais.cog)])
+                        x0=np.array([vessel_ais.north, vessel_ais.east, knot_to_m_per_sec(vessel_ais.sog*np.cos(np.deg2rad(vessel_ais.cog))), knot_to_m_per_sec(vessel_ais.sog*np.sin(np.deg2rad(vessel_ais.cog)))])
                     )
                     self.target_collection[vessel_ais.mmsi] = TrackedTarget(vessel=vessel_ais, tracker=new_tracker, last_update_time=target_time, use_ais_every=self.use_ais_every)
         else:
@@ -231,9 +232,11 @@ class NavigationAurora(INavigation):
                 elif np.linalg.norm(states[0:2] - np.array([vessel.north, vessel.east])) <= self.distance_threshold_target_tracking:
                     e_ts = states[1] + measurement[1] * np.sin(measurement[0] + states_estimation[5])
                     n_ts = states[0] + measurement[1] * np.cos(measurement[0] + states_estimation[5])
+                    est_ts_cog = ssa(states_estimation[5] + measurement[0] + np.pi)
+                    est_ts_sog = 0.1 # many static vessels
                     new_tracker = TargetTrackerSequentialEKF( # TargetTrackerSequentialCTRV(
                         **deepcopy(self.target_tracker_params),
-                        x0=np.array([n_ts, e_ts, 0.1, ssa(states_estimation[5] + measurement[0] + np.pi)]) # TODO: Don't use true value as initial guess, this is so over-confident
+                        x0=np.array([n_ts, e_ts, est_ts_sog * np.cos(est_ts_cog), est_ts_sog * np.sin(est_ts_cog)]) # TODO: Don't use true value as initial guess, this is so over-confident
                     )
                     self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time, use_ais_every=self.use_ais_every)
         else:
@@ -272,7 +275,7 @@ class NavigationAurora(INavigation):
                 elif np.linalg.norm(states[0:2] - np.array([vessel.north, vessel.east])) <= self.distance_threshold_target_tracking:
                     new_tracker = TargetTrackerSequentialEKF( # TargetTrackerSequentialCTRV(
                         **deepcopy(self.target_tracker_params),
-                        x0=np.array([vessel.north, vessel.east, knot_to_m_per_sec(vessel.sog), np.deg2rad(vessel.cog)])
+                        x0=np.array([vessel.north, vessel.east, knot_to_m_per_sec(vessel.sog*np.cos(np.deg2rad(vessel.cog))), knot_to_m_per_sec(vessel.sog*np.sin(np.deg2rad(vessel.cog)))])
                     )
                     self.target_collection[vessel.mmsi] = TrackedTarget(vessel=vessel, tracker=new_tracker, last_update_time=target_time, use_ais_every=self.use_ais_every)
         else:

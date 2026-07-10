@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 from python_vehicle_simulator.utils.math_fn import ssa
 
-class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
+class TargetTrackerSoftPlusSequentialEKF(IExtendedKalmanFilter):
     """
     Extended Kalman filter to estimate target ships position and speed using AIS & camera data.
     Sensor fusion is done in a sequential way to handle different data acquisition frequencies.
@@ -31,23 +31,43 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
             x0, # Initial states
             P0, # Initial error covariance
             dt, # Sampling time, needed when building the system's model.
+            sog_softplus_beta: float = 10.0,
             *args,
             **kwargs
         ):
         super().__init__(Q, R_ais, x0, P0, dt, *args, **kwargs)
         self.R_ais = R_ais
         self.R_camera = R_camera
+        self.sog_softplus_beta = max(float(sog_softplus_beta), 1e-6)
+
+    def _softplus(self, sog: float) -> float:
+        """
+        Smooth nonlinearity that behaves like ReLU but stays differentiable.
+        """
+        z = self.sog_softplus_beta * sog
+        return float((np.maximum(z, 0.0) + np.log1p(np.exp(-np.abs(z)))) / self.sog_softplus_beta)
+
+    def _softplus_derivative(self, sog: float) -> float:
+        """
+        Derivative of the smooth speed nonlinearity wrt sog.
+        """
+        z = self.sog_softplus_beta * sog
+        if z >= 0.0:
+            return float(1.0 / (1.0 + np.exp(-z)))
+        ez = np.exp(z)
+        return float(ez / (1.0 + ez))
 
     def f(self, x:np.ndarray, u:np.ndarray, *args, **kwargs) -> np.ndarray:
         """
         System's model: x' = f(x, u) + v
 
-        x = [north, east, Vn, Ve]
+        x = [north, east, sog, cog]
         """
+        sog_eff = self._softplus(float(x[2]))
         return np.array([
-            x[0] + self.dt * x[2],
-            x[1] + self.dt * x[3],
-            x[2],
+            x[0] + self.dt * sog_eff * np.cos(x[3]),
+            x[1] + self.dt * sog_eff * np.sin(x[3]),
+            sog_eff,
             x[3]
         ])
     
@@ -55,15 +75,18 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
         """
         Jacobian of system's model: df/dx for x = x_prev, u = u_prev
         """
+        sog_eff = self._softplus(float(x[2]))
+        dsog_dsog = self._softplus_derivative(float(x[2]))
         return np.array([
-            [1, 0, self.dt, 0],
-            [0, 1, 0, self.dt],
-            [0, 0, 1, 0],
+            [1, 0, self.dt * np.cos(x[3]) * dsog_dsog, -self.dt * sog_eff * np.sin(x[3])],
+            [0, 1, self.dt * np.sin(x[3]) * dsog_dsog, self.dt * sog_eff * np.cos(x[3])],
+            [0, 0, dsog_dsog, 0],
             [0, 0, 0, 1]
         ])
     
     def h(self, x:np.ndarray, *args, **kwargs) -> np.ndarray:
         raise RuntimeError(f"dhdx must be avoided for TargetTrackerSequentialEKF since it uses a sequential approach. Instead, call either dhdx_ais and dhdx_camera sequentially.")
+
     
     def h_ais(self, x: np.ndarray, *args, **kwargs) -> np.ndarray:
         """
@@ -71,12 +94,7 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
 
         y = h(x) = [north, east, sog, cog]
         """
-        z_ais = np.array([
-            x[0],
-            x[1],
-            np.linalg.norm(x[2:4]),
-            np.atan2(x[3], x[2])
-        ])
+        z_ais = self.dhdx_ais(x) @ x
         return z_ais
     
     def h_camera(self, x: np.ndarray, *args, os_neyaw: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
@@ -101,14 +119,7 @@ class TargetTrackerSequentialEKF(IExtendedKalmanFilter):
         """
         Jacobian of the measurement's model (ais): dh/dx for z = h(x)
         """
-        eps = 1e-6
-        V2_inv = 1/(x[2]**2 + x[3]**2 + eps)
-        return np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, np.sqrt(V2_inv)*x[2], np.sqrt(V2_inv)*x[3]],
-            [0, 0, -x[3]*V2_inv, x[2]*V2_inv]
-        ]) # We measure north, east, sog, cog
+        return np.eye(4) # We measure north, east, cog, sog directly
     
     def dhdx_camera(self, x: np.ndarray, *args, os_neyaw: Optional[np.ndarray] = None, **kwargs) -> np.ndarray:
         """

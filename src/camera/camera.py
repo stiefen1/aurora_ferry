@@ -45,6 +45,8 @@ class Camera(ISensor):
             params: CameraParams = CameraParams(),
             failure: Optional[Dict] = None,
             seed: Optional[int] = None,
+            ais_floor_deg: Optional[float] = None,
+            distance_inflation_factor: Optional[float] = None,
             **kwargs
         ):
         """
@@ -63,7 +65,10 @@ class Camera(ISensor):
         self.mmsi_to_exclude = mmsi_to_exclude
         self.update_every_sec = update_every_sec
         self.params = params
-
+        self.ais_floor_deg = ais_floor_deg if ais_floor_deg is not None else AIS_FLOOR_DEG
+        self.distance_inflation_factor = distance_inflation_factor if distance_inflation_factor is not None else DISTANCE_INFLATION_FACTOR
+            
+    
         if failure is not None:
             self.failure_time = pd.to_datetime(failure["time"])
         else:
@@ -367,12 +372,12 @@ class Camera(ISensor):
         return detected_vessels, info
     
     def get_camera_std(self, distance, visibility, illumination):
-        c_gamma = np.deg2rad(AIS_FLOOR_DEG)
+        c_gamma = np.deg2rad(self.ais_floor_deg)
         a_gamma = 0.0
 
         a_dist = 0.0
         c_dist_floor = 50.0
-        distance_std = DISTANCE_INFLATION_FACTOR * distance * np.tan(c_gamma) + c_dist_floor
+        distance_std = self.distance_inflation_factor * distance * np.tan(c_gamma) + c_dist_floor
 
         return a_gamma * distance**2 + c_gamma, a_dist * distance**2 + distance_std
     

@@ -116,7 +116,9 @@ class SimLauncher:
                 mmsi_to_exclude=mmsi_to_exclude,
                 update_every_sec=camera["update_every_sec"],
                 failure=camera["failure"],
-                seed=seed
+                seed=seed,
+                ais_floor_deg=camera.get("ais_floor_deg", None),
+                distance_inflation_factor=camera.get("distance_inflation_factor", None)
                 )
 
         aurora = AuroraFerry(
@@ -278,6 +280,9 @@ class SimLauncher:
 if __name__ == "__main__":
     import os
     launcher = SimLauncher()
-    # path_to_scenario = "Z:\\dev\\aurora_ferry\\sim_data\\cos_sin_obs\\scenarios\\cos_sin_obs_0.json"
-    path_to_scenario = os.path.join("sim_data", "29_06_26_1", "scenarios", "29_06_26_1_0.json")
+    # path_to_scenario = "Z:\\dev\\aurora_ferry\\sim_data\\dchi_7p5_width_70\\scenarios\\dchi_7p5_width_70_100.json"
+    path_to_scenario = os.path.join("sim_data", "test", "scenarios", "test_0.json")
     launcher.run_single_sim(path_to_scenario, render=True)
+
+    # INCREASE MINIMAL TARGET SPEED OR ALLOW FOR LONGER SIMULATION TIME
+    # TODO: Increase smoothness and make it actual in guidance module (i.e. account for trajectory stitching)
