@@ -94,7 +94,7 @@ class NavigationAurora(INavigation):
             q_tt: float = 0.4,  # process noise     (target tracker)
             r_ais: List = [10**2, 10**2, 0.2**2, np.deg2rad(2)**2],        # measurement noise (AIS)
             r_camera: List = [np.deg2rad(0.5)**2, 800**2],     # measurement noise (camera)
-            p0_tt: List = [49.0, 49.0, 0.5, 0.5],                  # state covariance  (target tracker)
+            p0_tt: List = [49.0, 49.0, 1.0, 1.0],                # state covariance  (target tracker)
             Q_se: Optional[np.ndarray] = Q_AURORA,          # process noise     (state estimator)
             R_se: Optional[np.ndarray] = R_AURORA,          # measurement noise (state estimator)
             P0_se: np.ndarray = np.eye(20),                 # state covariance  (state estimator)
